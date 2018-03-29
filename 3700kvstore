@@ -3,12 +3,18 @@
 import sys, socket, select, time, json, random
 
 class KVStore:
+	# Timeout in milliseconds
+	TIMEOUT = 500
+
 	def __init__(self, id, replicas):
 		# Instance ID number
 		self.my_id = id
 		# The ID numbers of all the other replicas
 		self.replica_ids = replicas
-
+		# The current election term across all replicas
+		self.term = 0
+		# Needs to be one of the following: follower, candidate, leader
+		self.state = 'follower'
 
 	def listen(self):
 		# Connect to the network. All messages to/from other replicas and clients will
@@ -28,7 +34,8 @@ class KVStore:
 
 				# For now, ignore get() and put() from clients
 				if msg['type'] in ['get', 'put']:
-								pass
+					pass
+					# print('type: ' + msg['type'])
 
 				# Handle noop messages. This may be removed from your final implementation
 				elif msg['type'] == 'noop':
