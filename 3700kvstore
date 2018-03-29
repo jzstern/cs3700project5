@@ -7,9 +7,9 @@ class KVStore:
 		# Socket connection
 		self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 		# Instance ID number
-		self.my_id = id
+		self.id = id
 		# The ID numbers of all the other replicas
-		self.replica_ids = replicas
+		self.replicas = replicas
 		# The current election term across all replicas
 		self.term = 0
 		# Needs to be one of the following: follower, candidate, leader
@@ -22,17 +22,50 @@ class KVStore:
 		self.election_timeout = random.randint(50, 100) / float(1000)
 		# Counter for the number of messages sent
 		self.MID = 0
+		# ID of the last leader we voted for
+		self.last_vote = ''
+		# List of replica IDs of those who have voted for me to be elected
+		self.votes = []
+		# ID of our current leader
+		self.leader = 'FFFF'
 
 		# Connect to the network. All messages to/from other replicas and clients will occur over this socket
-		self.sock.connect(self.my_id)
+		self.sock.connect(self.id)
 
 	# init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
 	def request_vote(self):
 		self.state = 'candidate'
 		self.term += 1
-		msg = {'src': self.my_id, 'dst': 'FFFF', 'leader': self.my_id, 'type': 'req_vote', 'MID': self.my_id + str(self.MID)}
-		self.MID += 1
+		self.send_message('FFFF', 'req_vote')
 
+	def cast_vote(self, ID):
+		self.last_vote = ID
+		self.send_message(ID, 'cast_vote')
+
+	def handle_vote(self, src):
+		if src not in self.votes:
+			self.votes.append(src)
+
+		if len(self.votes) > (len(self.replicas) / 2) + 1:
+			self.leader = self.id
+
+		self.send_message('FFFF', 'noop')
+
+	def send_message(self, dst, type):
+		"""
+		Sends a message over the socket to the dst with the given parameters
+		:param dst: Message destination
+		:param type: One of the following
+			get: Read request from client
+			put: Update store with given value from client
+			redirect: Forward put or get request to leader
+			noop:
+			req_vote: For candidates to request votes from replicas
+			cast_vote: Send a vote for a candidate to that candidate
+		:return:
+		"""
+		msg = {'src': self.id, 'dst': dst, 'leader': self.leader, 'type': type, 'MID': self.id + str(self.MID)}
+		self.MID += 1
 		self.sock.send(json.dumps(msg))
 
 	def listen(self):
@@ -51,6 +84,16 @@ class KVStore:
 				if msg['type'] in ['get', 'put']:
 					print('type: ' + msg['type'])
 
+				# If we are asked to cast a vote
+				elif msg['type'] == 'req_vote':
+					if self.state == 'follower':
+						if self.last_vote == '':
+							self.cast_vote(msg['src'])
+
+				# If someone casts a vote for us
+				elif msg['type'] == 'cast_vote':
+					self.handle_vote(msg['src'])
+
 				# Handle noop messages. This may be removed from your final implementation
 				elif msg['type'] == 'noop':
 					print '%s received a NOOP from %s' % (msg['dst'], msg['src'])
@@ -64,7 +107,7 @@ class KVStore:
 			if clock-last > 2:
 				# Send a no-op message to a random peer every two seconds, just for fun
 				# You definitely want to remove this from your implementation
-				msg = {'src': self.my_id, 'dst': random.choice(self.replica_ids), 'leader': 'FFFF', 'type': 'noop'}
+				msg = {'src': self.id, 'dst': random.choice(self.replicas), 'leader': 'FFFF', 'type': 'noop'}
 				self.sock.send(json.dumps(msg))
 				print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
 				last = clock
