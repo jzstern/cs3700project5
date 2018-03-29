@@ -56,3 +56,4 @@ if __name__ == "__main__":
 	init_replica_ids = sys.argv[2:]
 
 	db = KVStore(init_id, init_replica_ids)
+	db.listen()
