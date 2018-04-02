@@ -36,7 +36,7 @@ class KVStore:
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
     def request_vote(self):
-        print "{0} requesting votes, term {1}".format(self.id, self.term)
+        print "{0}     requesting votes, term {1}".format(self.id, self.term)
         # wipe out any old votes before starting a new election
         self.leader = 'FFFF'
         self.votes = [self.id] # vote for urself tho
@@ -65,10 +65,9 @@ class KVStore:
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
+            # TODO first heartbeat
 
         print "{0}     votes: {1}".format(self.id, self.votes)
-        # TODO first heartbeat
-        self.send_message('FFFF', 'noop')
         return
 
     def send_message(self, dst, type):
@@ -154,9 +153,10 @@ class KVStore:
                 print self.id + "     " + "split vote timeout " + str(self.election_timeout)'''
 
             # If we haven't heard from the leader for the length of timeout, try to elect myself
-            if clock - self.lastLeaderMsg >= self.timeout:
-                print self.id + "     " + "time passed since we heard from leader" + str(clock - self.lastLeaderMsg)
-                print self.id + "     " + "timeout " + str(self.timeout)
+            # (If it is not an election already)
+            if self.state != 'candidate' and clock - self.lastLeaderMsg >= self.timeout:
+                #print self.id + "     " + "time passed since we heard from leader" + str(clock - self.lastLeaderMsg)
+                #print self.id + "     " + "timeout " + str(self.timeout)
                 print "{0}     Havent heard from our leader, timeout".format(self.id)
                 self.request_vote()
 
@@ -167,13 +167,13 @@ class KVStore:
                 print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
                 self.request_vote()
 
-            if clock-last > 2:
+            '''if clock-last > 2:
                 # Send a no-op message to a random peer every two seconds, just for fun
                 # You definitely want to remove this from your implementation
                 msg = {'src': self.id, 'dst': random.choice(self.replicas), 'leader': 'FFFF', 'type': 'noop'}
                 self.sock.send(json.dumps(msg))
                 #print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
-                last = clock
+                last = clock'''
 
 
 if __name__ == "__main__":
