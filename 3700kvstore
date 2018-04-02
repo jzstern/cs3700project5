@@ -152,9 +152,8 @@ class KVStore:
                 print self.id + "     " + "time since split vote timeout " + str(clock - self.election_start_time)
                 print self.id + "     " + "split vote timeout " + str(self.election_timeout)'''
 
-            # If we haven't heard from the leader for the length of timeout, try to elect myself
-            # (If it is not an election already)
-            if self.state != 'candidate' and clock - self.lastLeaderMsg >= self.timeout:
+            # If I am a follower and I haven't heard from the leader for the length of timeout, try to elect myself
+            if self.state == 'follower' and clock - self.lastLeaderMsg >= self.timeout:
                 #print self.id + "     " + "time passed since we heard from leader" + str(clock - self.lastLeaderMsg)
                 #print self.id + "     " + "timeout " + str(self.timeout)
                 print "{0}     Havent heard from our leader, timeout".format(self.id)
