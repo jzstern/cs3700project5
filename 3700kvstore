@@ -3,138 +3,182 @@
 import sys, socket, select, time, json, random
 
 class KVStore:
-	def __init__(self, id, replicas):
-		# Socket connection
-		self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-		# Timeout in milliseconds
-		self.timeout = random.randint(150, 300) / float(1000)
-		# Timeout to be used during a split vote
-		self.election_timeout = random.randint(50, 100) / float(1000)
-		# Instance ID number
-		self.id = id
-		# The ID numbers of all the other replicas
-		self.replicas = replicas
-		# The current election term across all replicas
-		self.term = 0
-		# Needs to be one of the following: follower, candidate, leader
-		self.state = 'follower'
-		# Time we last heard a message from the leader
-		self.lastLeaderMsg = time.time()
-		# Counter for the number of messages sent
-		self.MID = 0
-		# ID of the last leader we voted for
-		self.last_vote = ''
-		# List of replica IDs of those who have voted for me to be elected
-		self.votes = []
-		# ID of our current leader
-		self.leader = 'FFFF'
-		# Time that the most recent election I was a candidate for started
-		self.election_start_time = ''
+    def __init__(self, id, replicas):
+        # Socket connection
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        # Message buffer
+        self.messages = []
+        # Timeout in milliseconds
+        self.timeout = random.randint(150, 1500) / float(1000)
+        # Timeout to be used during a split vote
+        self.election_timeout = random.randint(50, 1000) / float(1000)
+        # Instance ID number
+        self.id = id
+        # The ID numbers of all the other replicas
+        self.replicas = replicas
+        # The current election term across all replicas
+        self.term = 0
+        # Needs to be one of the following: follower, candidate, leader
+        self.state = 'follower'
+        # Time we last heard a message from the leader
+        self.lastLeaderMsg = time.time()
+        # Counter for the number of messages sent
+        self.MID = 0
+        # List of replica IDs of those who have voted for me to be elected
+        self.votes = []
+        # ID of our current leader
+        self.leader = 'FFFF'
+        # Time that the most recent election I was a candidate for started
+        self.election_start_time = ''
 
-		# Connect to the network. All messages to/from other replicas and clients will occur over this socket
-		self.sock.connect(self.id)
+        # Connect to the network. All messages to/from other replicas and clients will occur over this socket
+        self.sock.connect(self.id)
 
-	# init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
-	def request_vote(self):
-		self.state = 'candidate'
-		self.term += 1
-		self.send_message('FFFF', 'req_vote')
-		self.election_start_time = time.time()
+    # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
+    def request_vote(self):
+        print "{0} requesting votes, term {1}".format(self.id, self.term)
+        # wipe out any old votes before starting a new election
+        self.leader = 'FFFF'
+        self.votes = [self.id] # vote for urself tho
+        self.state = 'candidate'
+        self.term += 1
+        self.send_message('FFFF', 'req_vote')
+        self.election_start_time = time.time()
+        return
 
-	def cast_vote(self, ID):
-		self.last_vote = ID
-		self.send_message(ID, 'cast_vote')
+    def cast_vote(self, ID, term):
+        print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
+        self.leader = 'FFFF'
+        self.term = term
+        self.send_message(ID, 'cast_vote')
+        return
 
-	def handle_vote(self, src):
-		if src not in self.votes:
-			self.votes.append(src)
+    def handle_vote(self, src):
+        # if the sender has not voted for me yet, add the vote to my list of votes
+        if src not in self.votes:
+            self.votes.append(str(src))
+            print "{0}     {1} voted for me".format(self.id, src)
 
-		if len(self.votes) > (len(self.replicas) / 2) + 1:
-			self.leader = self.id
+        # if majority voted for me
+        if len(self.votes) > (len(self.replicas) / 2) + 1:
+            print "{0}     I am elected, term {1}".format(self.id, self.term)
+            # we are the leader!
+            self.leader = self.id
+            self.state = 'leader'
 
-		self.send_message('FFFF', 'noop')
+        print "{0}     votes: {1}".format(self.id, self.votes)
+        # TODO first heartbeat
+        self.send_message('FFFF', 'noop')
+        return
 
-	def send_message(self, dst, type):
-		"""
-		Sends a message over the socket to the dst with the given parameters
-		:param dst: Message destination
-		:param type: One of the following
-			get: Read request from client
-			put: Update store with given value from client
-			redirect: Forward put or get request to leader
-			noop:
-			req_vote: For candidates to request votes from replicas
-			cast_vote: Send a vote for a candidate to that candidate
-		"""
-		msg = {'src': self.id, 'dst': dst, 'leader': self.leader, 'type': type, 'MID': self.id + str(self.MID), 'term': self.term}
-		self.MID += 1
-		self.sock.send(json.dumps(msg))
+    def send_message(self, dst, type):
+        """
+        Sends a message over the socket to the dst with the given parameters
+        :param dst: Message destination
+        :param type: One of the following
+            get: Read request from client
+            put: Update store with given value from client
+            redirect: Forward put or get request to leader
+            noop:
+            req_vote: For candidates to request votes from replicas
+            cast_vote: Send a vote for a candidate to that candidate
+        """
+        msg = {
+            'src': self.id,
+            'dst': dst,
+            'leader': self.leader,
+            'type': type,
+            'MID': self.id + str(self.MID),
+            'term': self.term
+        }
+        self.MID += 1
+        #print json.dumps(msg)
+        self.sock.send(json.dumps(msg))
+        return
 
-	def listen(self):
-		last = 0
+    def receive_messages(self, ready):
+        msg_raw = self.sock.recv(32768)
 
-		while True:
-			ready = select.select([self.sock], [], [], 0.1)[0]
+        if len(msg_raw) == 0:
+           return 
 
-			if self.sock in ready:
-				msg_raw = self.sock.recv(32768)
+        print self.id + '     ' + msg_raw
+        msg = json.loads(msg_raw)
+        self.messages.append(msg)
 
-				if len(msg_raw) == 0: continue
-				msg = json.loads(msg_raw)
+    def handle_messages(self):
+        while len(self.messages) > 0:
+            msg = self.messages.pop(0)
+            # TODO: if we get a message from a leader, set state to follower, end election, set term
+            # If we receive a message with a higher term...
+            if msg['src'] == msg['leader'] and msg['term'] > self.term:
+                # If we are the leader...
+                if self.leader == self.id:
+                    # ... make that replica our leader
+                    self.leader = msg['src']
+                else:
+                    # ... otherwise, update our term
+                    self.term = msg['term']
 
-				# If we receive a message with a higher term...
-				if msg['term'] > self.term:
-					# If we are the leader...
-					if self.leader == self.id:
-						# ... make that replica our leader
-						self.leader = msg['src']
-					else:
-						# ... otherwise, update our term
-						self.term = msg['term']
+            # For now, ignore get() and put() from clients
+            if msg['type'] in ['get', 'put']:
+                print('type: ' + msg['type'])
 
-				# For now, ignore get() and put() from clients
-				if msg['type'] in ['get', 'put']:
-					print('type: ' + msg['type'])
+            # If we are asked to cast a vote
+            elif msg['type'] == 'req_vote':
+                if self.state == 'follower' and msg['term'] > self.term:
+                    self.cast_vote(msg['src'], msg['term'])
 
-				# If we are asked to cast a vote
-				elif msg['type'] == 'req_vote':
-					if self.state == 'follower':
-						if self.last_vote == '':
-							self.cast_vote(msg['src'])
-							#								 TODO ; reset when leader has been elected
+            # If someone casts a vote for us
+            elif msg['type'] == 'cast_vote' and self.state == 'candidate':
+                print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
+                self.handle_vote(msg['src'])
 
-				# If someone casts a vote for us
-				elif msg['type'] == 'cast_vote':
-					self.handle_vote(msg['src'])
+            # Handle noop messages. This may be removed from your final implementation
+            #elif msg['type'] == 'noop':
+                #print '%s received a NOOP from %s' % (msg['dst'], msg['src'])
+    
+    def listen(self):
+        last = 0
 
-				# Handle noop messages. This may be removed from your final implementation
-				elif msg['type'] == 'noop':
-					print '%s received a NOOP from %s' % (msg['dst'], msg['src'])
+        while True:
+            ready = select.select([self.sock], [], [], 0.1)[0]
+            if self.sock in ready:
+                self.receive_messages(ready)
 
+            self.handle_messages()
 
-			clock = time.time()
+            clock = time.time()
+            '''if self.state == 'candidate':
+                print self.id + "     " + "time since split vote timeout " + str(clock - self.election_start_time)
+                print self.id + "     " + "split vote timeout " + str(self.election_timeout)'''
 
-			# If we haven't heard from the leader for the length of timeout, try to elect myself
-			if clock - self.lastLeaderMsg >= self.timeout:
-				self.request_vote()
+            # If we haven't heard from the leader for the length of timeout, try to elect myself
+            if clock - self.lastLeaderMsg >= self.timeout:
+                print self.id + "     " + "time passed since we heard from leader" + str(clock - self.lastLeaderMsg)
+                print self.id + "     " + "timeout " + str(self.timeout)
+                print "{0}     Havent heard from our leader, timeout".format(self.id)
+                self.request_vote()
 
-			# If an election lasts longer than our election timeout, try to relect myself
-			if self.state == 'candidate' and clock - self.election_start_time >= self.election_timeout:
-				# TODO ; ....
-				continue
+            # If an election lasts longer than our election timeout, try to relect myself
+            # "split vote"
+            if self.state == 'candidate' and clock - self.election_start_time >= self.election_timeout:
+                print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
+                print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
+                self.request_vote()
 
-			if clock-last > 2:
-				# Send a no-op message to a random peer every two seconds, just for fun
-				# You definitely want to remove this from your implementation
-				msg = {'src': self.id, 'dst': random.choice(self.replicas), 'leader': 'FFFF', 'type': 'noop'}
-				self.sock.send(json.dumps(msg))
-				print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
-				last = clock
+            if clock-last > 2:
+                # Send a no-op message to a random peer every two seconds, just for fun
+                # You definitely want to remove this from your implementation
+                msg = {'src': self.id, 'dst': random.choice(self.replicas), 'leader': 'FFFF', 'type': 'noop'}
+                self.sock.send(json.dumps(msg))
+                #print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
+                last = clock
 
 
 if __name__ == "__main__":
-	init_id = sys.argv[1]
-	init_replica_ids = sys.argv[2:]
+    init_id = sys.argv[1]
+    init_replica_ids = sys.argv[2:]
 
-	db = KVStore(init_id, init_replica_ids)
-	db.listen()
+    db = KVStore(init_id, init_replica_ids)
+    db.listen()
