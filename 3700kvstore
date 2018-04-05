@@ -22,8 +22,8 @@ class KVStore:
         self.term = 0
         # A list of dictionaries containing a command and the term it was called
         self.log = []
-        # List of dict containing key value pairs as requested by the client
-        self.key_store = []
+        # Dict containing key value pairs as requested by the client
+        self.key_store = {}
         # Entries for neighboring nodes to add to their log (in the same format as self.log)
         self.append_entries = []
         # Needs to be one of the following: follower, candidate, leader
@@ -141,6 +141,16 @@ class KVStore:
             self.term = msg_term
             self.state = 'follower'
 
+
+    def get(self, src, key):
+        if key in self.key_store:
+            value = self.key_store[key]
+        else:
+            value = ''
+
+        self.send_message(src, 'ok', value)
+        # self.send_message(src, 'fail')
+
     def handle_messages(self):
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
@@ -149,9 +159,11 @@ class KVStore:
             # If I am the leader...
             if self.state == 'leader':
                 if msg['type'] == 'get':
-                    self.send_message(msg['src'], 'get_success')
+
+                    self.get(msg['src'], msg['key'])
+
                     # TODO ; if get() is successful, send an 'ok' with value
-                    # TODO ; if a get() fails, send a 'fail'  and retry get
+                    # TODO ; if a get() fails, send a 'fail' and retry get
 
                 elif msg['type'] == 'put':
                     # TODO ; if put() is successful, send an 'ok'
