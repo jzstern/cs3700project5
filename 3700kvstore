@@ -28,8 +28,10 @@ class KVStore:
         self.commit_index = 0
         # Index of the last thing committed to the state machine
         self.last_applied = 0
-        # Entries for neighboring nodes to add to their log (in the same format as self.log)
-        self.append_entries = []
+        # Dict { replica_id: next_index } representing the next log entry to send for each replica
+        self.next_index = {}
+        # List of indexes of the highest log entry known to be replicated on each replica
+        self.match_index = []
         # Needs to be one of the following: follower, candidate, leader
         self.state = 'follower'
         # Counter for the number of messages sent
@@ -80,12 +82,17 @@ class KVStore:
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
-            # TODO first heartbeat
+
+            for replica in self.replicas:
+                self.next_index[replica] = len(self.log) + 1
+
+            # Tell everyone I'm the BOSS
+            self.send_heartbeat()
 
         print "{0}     votes: {1}".format(self.id, self.votes)
         return
 
-    def send_message(self, dst, type, value={}):
+    def send_message(self, dest, type, value={}):
         """
         Sends a message over the socket to the dst with the given parameters
         :param dst: Message destination
@@ -100,7 +107,7 @@ class KVStore:
 
         msg = {
                 'src': self.id,
-                'dst': dst,
+                'dst': dest,
                 'leader': self.leader,
                 'type': type,
                 'MID': self.id + str(self.MID),
@@ -108,10 +115,10 @@ class KVStore:
             }
 
         if type == 'append_entries':
-            prev_log_index = len(self.log) - len(self.append_entries)
+            prev_log_index = self.next_index[dest] - 1
 
             msg.update({
-                'append_entries': self.append_entries,
+                'entry_to_add': self.log[prev_log_index],  # sus but shorthand
                 'prev_log_index': prev_log_index,
                 'prev_log_term': self.log[prev_log_index - 1]['term'],
                 'leader_commit': self.commit_index
@@ -120,14 +127,20 @@ class KVStore:
         elif type == 'ok':
             msg.update({'value': value})
 
+        elif type == 'ack':
+            msg.update({'identical_logs': value})
+
         self.MID += 1
         #print json.dumps(msg)
         self.sock.send(json.dumps(msg))
         return
 
     def send_heartbeat(self):
+        # TODO ; send multiple log entries to append to boost efficiency
+        for replica in self.replicas:
+            self.send_message(replica, 'append_entries')
+
         self.last_heartbeat_sent = time.time()
-        self.send_message('FFFF', 'append_entries')
 
     def receive_messages(self, ready):
         msg_raw = self.sock.recv(32768)
@@ -165,43 +178,44 @@ class KVStore:
 
     def put(self, key, value, term):
         self.log.append({'key': key, 'value': value, 'term': term})
-        self.append_entries.append({'key': key, 'value': value, 'term': term})
-
-        # should we immediately send a heartbeat every time we update?
-        # do we NEED an append_entries or can we just send the full log?
+        # should we immediately send a heartbeat every time we update? NO
         return
 
-    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit):
-        # Reply false if the heartbeat term is less than our term
+    def handle_heartbeat(self, entry, prev_log_index, prev_log_term, term, leader_commit):
+        identical_logs = True
+        self.last_leader_msg = time.time()
+
+        # Reply false if the heartbeat term is less than our term (1)
         if term < self.term:
-            # TODO ; reply FALSE ugh
+            identical_logs = False
+            self.send_message(self.leader, 'ack', identical_logs)
             return
 
-        # If our prev_log_index is in range of our current log...
+        # If our prev_log_index is in range of our current log... (2)
         if prev_log_index <= len(self.log):
             # ... and the terms match up... (2)
             if self.log[prev_log_index - 1]['term'] == prev_log_term:
                 i = 0
-                # ... add all new entries to log
-                for entry in entries:
-                    # (3)
-                    if len(self.log) > prev_log_index + i and self.log[prev_log_index + i]['term'] == entry['term']:
-                        self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
-                    # Delete the existing entry and all that follow
-                    else:
-                        self.log = self.log[0 : prev_log_index + i]
+                # ... add all new entries to log (4)
+                # (3)
+                if len(self.log) > prev_log_index + i and self.log[prev_log_index + i]['term'] == entry['term']:
+                    self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
+                # Delete the existing entry and all that follow
+                else:
+                    self.log = self.log[0 : prev_log_index + i]
 
-                    i += 1
+                i += 1
 
             else:
-                 # TODO ; reply FALSE ugh
-                print 'ugh'
+                identical_logs = False
 
-        self.send_message(self.leader, 'ack')
+        # (5)
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, len(self.log))
+
+        self.send_message(self.leader, 'ack', identical_logs)
         self.last_leader_msg = time.time()
         return
-
-        # self.log.append({'key': key, 'value': value, 'term': term})
 
     def handle_messages(self):
         while len(self.messages) > 0:
@@ -224,8 +238,9 @@ class KVStore:
                     self.put(msg['key'], msg['value'], msg['term'])
                     print 'doing put stuff'
                 elif msg['type'] == 'ack':
-
-
+                    # If a replica's log isn't identical to mine (leader's), decrement their next_index
+                    if not msg['identical_logs']:
+                        self.next_index[msg['src']] -= 1
 
             # If I'm not the leader and I receive a get() or put() request...
             elif msg['type'] in ['get', 'put']:
@@ -237,7 +252,7 @@ class KVStore:
                 # If we got a heartbeat message
                 if msg['type'] == 'append_entries':
                     self.handle_heartbeat(
-                        msg['append_entries'],
+                        msg['entry_to_add'],
                         msg['prev_log_index'],
                         msg['prev_log_term'],
                         msg['term'],
