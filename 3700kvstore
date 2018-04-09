@@ -20,10 +20,14 @@ class KVStore:
         self.replicas = replicas
         # The current election term across all replicas
         self.term = 0
-        # A list of dictionaries containing a command and the term it was called
+        # A list of dictionaries containing a command, the term it was called, and a log index
         self.log = []
         # Dict containing key value pairs as requested by the client
         self.key_store = {}
+        # Index of the last thing I committed
+        self.commit_index = 0
+        # Index of the last thing committed to the state machine
+        self.last_applied = 0
         # Entries for neighboring nodes to add to their log (in the same format as self.log)
         self.append_entries = []
         # Needs to be one of the following: follower, candidate, leader
@@ -104,7 +108,14 @@ class KVStore:
             }
 
         if type == 'append_entries':
-            msg.update({'append_entries': self.append_entries})
+            prev_log_index = len(self.log) - len(self.append_entries)
+
+            msg.update({
+                'append_entries': self.append_entries,
+                'prev_log_index': prev_log_index,
+                'prev_log_term': self.log[prev_log_index - 1]['term'],
+                'leader_commit': self.commit_index
+            })
 
         elif type == 'ok':
             msg.update({'value': value})
@@ -117,17 +128,17 @@ class KVStore:
     def send_heartbeat(self):
         self.last_heartbeat_sent = time.time()
         self.send_message('FFFF', 'append_entries')
-        # TODO ; send heartbeat lol
 
     def receive_messages(self, ready):
         msg_raw = self.sock.recv(32768)
 
         if len(msg_raw) == 0:
-           return 
+           return
 
         print self.id + '     ' + msg_raw
         msg = json.loads(msg_raw)
         self.messages.append(msg)
+        return
 
     def check_leadership(self, msg_source, msg_leader, msg_term):
         # If we receive a message with a higher term...
@@ -140,6 +151,7 @@ class KVStore:
             # Update our term and state
             self.term = msg_term
             self.state = 'follower'
+        return
 
 
     def get(self, src, key):
@@ -149,6 +161,47 @@ class KVStore:
             value = ''
 
         self.send_message(src, 'ok', value)
+        return
+
+    def put(self, key, value, term):
+        self.log.append({'key': key, 'value': value, 'term': term})
+        self.append_entries.append({'key': key, 'value': value, 'term': term})
+
+        # should we immediately send a heartbeat every time we update?
+        # do we NEED an append_entries or can we just send the full log?
+        return
+
+    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit):
+        # Reply false if the heartbeat term is less than our term
+        if term < self.term:
+            # TODO ; reply FALSE ugh
+            return
+
+        # If our prev_log_index is in range of our current log...
+        if prev_log_index <= len(self.log):
+            # ... and the terms match up... (2)
+            if self.log[prev_log_index - 1]['term'] == prev_log_term:
+                i = 0
+                # ... add all new entries to log
+                for entry in entries:
+                    # (3)
+                    if len(self.log) > prev_log_index + i and self.log[prev_log_index + i]['term'] == entry['term']:
+                        self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
+                    # Delete the existing entry and all that follow
+                    else:
+                        self.log = self.log[0 : prev_log_index + i]
+
+                    i += 1
+
+            else:
+                 # TODO ; reply FALSE ugh
+                print 'ugh'
+
+        self.send_message(self.leader, 'ack')
+        self.last_leader_msg = time.time()
+        return
+
+        # self.log.append({'key': key, 'value': value, 'term': term})
 
     def handle_messages(self):
         while len(self.messages) > 0:
@@ -168,7 +221,10 @@ class KVStore:
                     # TODO ; if put() is successful, send an 'ok'
                     # TODO ; if a put() fails, send a 'fail' and retry
                     # TODO ; if a put() is sent to a follower, respond w/ a redirect and fwd to leader
+                    self.put(msg['key'], msg['value'], msg['term'])
                     print 'doing put stuff'
+                elif msg['type'] == 'ack':
+
 
 
             # If I'm not the leader and I receive a get() or put() request...
@@ -178,8 +234,18 @@ class KVStore:
 
             # We are not the leader but...
             else:
+                # If we got a heartbeat message
+                if msg['type'] == 'append_entries':
+                    self.handle_heartbeat(
+                        msg['append_entries'],
+                        msg['prev_log_index'],
+                        msg['prev_log_term'],
+                        msg['term'],
+                        msg['leader_commit']
+                    )
+
                 # If we are asked to cast a vote
-                if msg['type'] == 'req_vote':
+                elif msg['type'] == 'req_vote':
                     if self.state == 'follower' and msg['term'] > self.term:
                         self.cast_vote(msg['src'], msg['term'])
 
