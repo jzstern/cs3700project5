@@ -149,7 +149,6 @@ class KVStore:
             value = ''
 
         self.send_message(src, 'ok', value)
-        # self.send_message(src, 'fail')
 
     def handle_messages(self):
         while len(self.messages) > 0:
@@ -163,12 +162,13 @@ class KVStore:
                     self.get(msg['src'], msg['key'])
 
                     # TODO ; if get() is successful, send an 'ok' with value
-                    # TODO ; if a get() fails, send a 'fail' and retry get
+                    # TODO ; if a get() fails, send a 'fail'
 
                 elif msg['type'] == 'put':
                     # TODO ; if put() is successful, send an 'ok'
                     # TODO ; if a put() fails, send a 'fail' and retry
                     # TODO ; if a put() is sent to a follower, respond w/ a redirect and fwd to leader
+                    print 'doing put stuff'
 
 
             # If I'm not the leader and I receive a get() or put() request...
