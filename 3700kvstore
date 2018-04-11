@@ -97,7 +97,7 @@ class KVStore:
         #print "{0}     votes: {1}".format(self.id, self.votes)
         return
 
-    def send_message(self, dest, type, value={}, MID=self.id + str(self.MID)):
+    def send_message(self, dest, type, value={}, MID=''):
         """
         Sends a message over the socket to the dst with the given parameters
         :param dst: Message destination
@@ -109,6 +109,10 @@ class KVStore:
             req_vote: For candidates to request votes from replicas
             cast_vote: Send a vote for a candidate to that candidate
         """
+
+        # Optional argument workaround
+        if MID == '':
+            MID = self.id + str(self.MID)
 
         msg = {
                 'src': self.id,
