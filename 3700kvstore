@@ -97,6 +97,19 @@ class KVStore:
         #print "{0}     votes: {1}".format(self.id, self.votes)
         return
 
+    def check_leadership(self, msg_source, msg_leader, msg_term):
+        # If we receive a message with a higher term...
+        if msg_source == msg_leader and msg_term >= self.term:
+            # If we are the leader...
+            if self.state == 'leader':
+                # ... make that replica our leader
+                self.leader = msg_source
+
+            # Update our term and state
+            self.term = msg_term
+            self.state = 'follower'
+        return
+
     def send_message(self, dest, type, value={}, MID=''):
         """
         Sends a message over the socket to the dst with the given parameters
@@ -154,28 +167,33 @@ class KVStore:
 
         self.last_heartbeat_sent = time.time()
 
-    def receive_messages(self, ready):
-        msg_raw = self.sock.recv(32768)
-
-        if len(msg_raw) == 0:
-           return
-
-        #print self.id + '     ' + msg_raw
-        msg = json.loads(msg_raw)
-        self.messages.append(msg)
+    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index, leader_last_applied):
+        self.update_log(entries, prev_log_index, prev_log_term, term, leader_commit_index)
+        self.update_keystore(leader_last_applied)
         return
 
-    def check_leadership(self, msg_source, msg_leader, msg_term):
-        # If we receive a message with a higher term...
-        if msg_source == msg_leader and msg_term >= self.term:
-            # If we are the leader...
-            if self.state == 'leader':
-                # ... make that replica our leader
-                self.leader = msg_source
+    def handle_ack(self, src, identical_logs, replica_commit_index):
+        # If a replica's log isn't identical to mine (leader's)...
+        if not identical_logs:
+            # ... decrement their next_index
+            self.next_index[src] -= 1
+        else:
+            # ... but if they match, update their next_index
+            self.next_index[src] = replica_commit_index + 1
 
-            # Update our term and state
-            self.term = msg_term
-            self.state = 'follower'
+            # If the replica's log is up to date, increment our ack_count
+            if self.last_applied + 1 <= replica_commit_index:
+                self.ack_count += 1
+
+            # If over half our replicas have committed an entry...
+            if self.ack_count > len(self.replicas) + 1:
+                # ... apply that entry to our local db and reset ack_count
+                entry = self.log[self.last_applied]
+                self.key_store[entry['key']] = entry['value']
+                self.last_applied += 1
+                self.ack_count = 0
+                self.send_message(entry['client'], 'ok', entry['value'], entry['MID'])
+
         return
 
     def get(self, client, key, MID):
@@ -252,33 +270,15 @@ class KVStore:
 
         return
 
-    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index, leader_last_applied):
-        self.update_log(entries, prev_log_index, prev_log_term, term, leader_commit_index)
-        self.update_keystore(leader_last_applied)
-        return
+    def receive_messages(self, ready):
+        msg_raw = self.sock.recv(32768)
 
-    def handle_ack(self, src, identical_logs, replica_commit_index):
-        # If a replica's log isn't identical to mine (leader's)...
-        if not identical_logs:
-            # ... decrement their next_index
-            self.next_index[src] -= 1
-        else:
-            # ... but if they match, update their next_index
-            self.next_index[src] = replica_commit_index + 1
+        if len(msg_raw) == 0:
+           return
 
-            # If the replica's log is up to date, increment our ack_count
-            if self.last_applied + 1 <= replica_commit_index:
-                self.ack_count += 1
-
-            # If over half our replicas have committed an entry...
-            if self.ack_count > len(self.replicas) + 1:
-                # ... apply that entry to our local db and reset ack_count
-                entry = self.log[self.last_applied]
-                self.key_store[entry['key']] = entry['value']
-                self.last_applied += 1
-                self.ack_count = 0
-                self.send_message(entry['client'], 'ok', entry['value'], entry['MID'])
-
+        #print self.id + '     ' + msg_raw
+        msg = json.loads(msg_raw)
+        self.messages.append(msg)
         return
 
     def handle_messages(self):
@@ -329,8 +329,6 @@ class KVStore:
                     self.handle_vote(msg['src'])
     
     def listen(self):
-        last = 0
-
         while True:
             ready = select.select([self.sock], [], [], 0.1)[0]
             if self.sock in ready:
