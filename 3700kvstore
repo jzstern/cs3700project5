@@ -97,7 +97,7 @@ class KVStore:
         #print "{0}     votes: {1}".format(self.id, self.votes)
         return
 
-    def send_message(self, dest, type, value={}):
+    def send_message(self, dest, type, value={}, MID=self.id + str(self.MID)):
         """
         Sends a message over the socket to the dst with the given parameters
         :param dst: Message destination
@@ -115,7 +115,7 @@ class KVStore:
                 'dst': dest,
                 'leader': self.leader,
                 'type': type,
-                'MID': self.id + str(self.MID),
+                'MID': MID,
                 'term': self.term
             }
 
@@ -174,17 +174,22 @@ class KVStore:
             self.state = 'follower'
         return
 
-    def get(self, client, key):
+    def get(self, client, key, MID):
         if key in self.key_store:
             value = self.key_store[key]
         else:
             value = ''
-
-        self.send_message(client, 'ok', value)
+        self.send_message(client, 'ok', value, MID)
         return
 
-    def put(self, client, key, value, term):
-        self.log.append({'key': key, 'value': value, 'term': term, 'client': client})
+    def put(self, client, key, value, term, mid):
+        self.log.append({
+            'key': key,
+            'value': value,
+            'term': term,
+            'client': client,
+            'MID': mid
+        })
         self.commit_index += 1
         return
 
@@ -268,32 +273,33 @@ class KVStore:
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
                 self.ack_count = 0
-                self.send_message(entry['client'], 'ok', entry['value'])
+                self.send_message(entry['client'], 'ok', entry['value'], entry['MID'])
 
         return
 
     def handle_messages(self):
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
-            self.check_leadership(msg['src'], msg['leader'], msg['term'])
+            if 'term' in msg:
+                self.check_leadership(msg['src'], msg['leader'], msg['term'])
 
             # If I am the leader...
             if self.state == 'leader':
                 if msg['type'] == 'get':
-                    self.get(msg['src'], msg['key'])
+                    self.get(msg['src'], msg['key'], msg['MID'])
                     # TODO ; if a get() fails, send a 'fail'
 
                 elif msg['type'] == 'put':
                     # TODO ; if a put() fails, send a 'fail' and retry
 
-                    self.put(msg['src'], msg['key'], msg['value'], msg['term'])
+                    self.put(msg['src'], msg['key'], msg['value'], msg['term'], msg['MID'])
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
             # If I'm not the leader and I receive a get() or put() request...
             elif msg['type'] in ['get', 'put']:
                 # ... redirect it to the leader
-                self.send_message(msg['src'], 'redirect')
+                self.send_message(msg['src'], 'redirect', MID=msg['MID'])
 
             # We are not the leader but...
             else:
