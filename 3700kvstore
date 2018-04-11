@@ -280,15 +280,12 @@ class KVStore:
             # If I am the leader...
             if self.state == 'leader':
                 if msg['type'] == 'get':
-
                     self.get(msg['src'], msg['key'])
-
-                    # TODO ; if get() is successful, send an 'ok' with value
                     # TODO ; if a get() fails, send a 'fail'
 
                 elif msg['type'] == 'put':
-                    # TODO ; if put() is successful, send an 'ok'
                     # TODO ; if a put() fails, send a 'fail' and retry
+
                     self.put(msg['src'], msg['key'], msg['value'], msg['term'])
                     print 'doing put stuff'
                 elif msg['type'] == 'ack':
@@ -297,7 +294,7 @@ class KVStore:
             # If I'm not the leader and I receive a get() or put() request...
             elif msg['type'] in ['get', 'put']:
                 # ... redirect it to the leader
-                self.send_message(self.leader, 'redirect')
+                self.send_message(msg['src'], 'redirect')
 
             # We are not the leader but...
             else:
