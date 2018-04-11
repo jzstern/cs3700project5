@@ -30,9 +30,9 @@ class KVStore:
         self.last_applied = 0
         # Number of replicas that have an updated to the next log entry we want to commit
         self.ack_count = 0
-        # Dict { replica_id: next_index } representing the next log entry to send for each replica
+        # Dict { replica_id: next_index } representing the last log entry in each replica's log
         self.next_index = {}
-        # List of indexes of the highest log entry known to be replicated on each replica
+        # List of indexes of the highest entry known to be replicated in the keystore of each replica
         self.match_index = []
         # Needs to be one of the following: follower, candidate, leader
         self.state = 'follower'
@@ -84,6 +84,8 @@ class KVStore:
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
+            self.ack_count = 0
+            self.commit_index = 0
 
             # Update everyone's next_index to match my last logged + 1
             for replica in self.replicas:
@@ -125,7 +127,8 @@ class KVStore:
                 'entries': self.log[prev_log_index:],  # sus but shorthand
                 'prev_log_index': prev_log_index,
                 'prev_log_term': self.log[prev_log_index - 1]['term'],
-                'leader_commit_index': self.commit_index
+                'leader_commit_index': self.commit_index,
+                'leader_last_applied': self.last_applied
             })
 
         elif type == 'ok':
@@ -171,21 +174,21 @@ class KVStore:
             self.state = 'follower'
         return
 
-    def get(self, src, key):
+    def get(self, client, key):
         if key in self.key_store:
             value = self.key_store[key]
         else:
             value = ''
 
-        self.send_message(src, 'ok', value)
+        self.send_message(client, 'ok', value)
         return
 
-    def put(self, key, value, term):
-        self.log.append({'key': key, 'value': value, 'term': term})
+    def put(self, client, key, value, term):
+        self.log.append({'key': key, 'value': value, 'term': term, 'client': client})
         self.commit_index += 1
         return
 
-    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
+    def update_log(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
         identical_logs = True
         self.last_leader_msg = time.time()
 
@@ -230,12 +233,26 @@ class KVStore:
         self.last_leader_msg = time.time()
         return
 
+    def update_keystore(self, leader_last_applied):
+        if leader_last_applied > self.last_applied and len(self.log) > self.last_applied:
+            for entry in self.log[self.last_applied - 1:]:
+                self.key_store[entry['key']] = entry['value']
+                self.last_applied += 1
+
+        # self.send_message(self.leader, 'ack', {'identical_logs': True, 'commit_index': self.commit_index})
+
+        return
+
+    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index, leader_last_applied):
+        self.update_log(entries, prev_log_index, prev_log_term, term, leader_commit_index)
+        self.update_keystore(leader_last_applied)
+        return
+
     def handle_ack(self, src, identical_logs, replica_commit_index):
         # If a replica's log isn't identical to mine (leader's)...
         if not identical_logs:
             # ... decrement their next_index
             self.next_index[src] -= 1
-            return
         else:
             # ... but if they match, update their next_index
             self.next_index[src] = replica_commit_index + 1
@@ -244,10 +261,16 @@ class KVStore:
             if self.last_applied + 1 <= replica_commit_index:
                 self.ack_count += 1
 
+            # If over half our replicas have committed an entry...
             if self.ack_count > len(self.replicas) + 1:
-                # TODO ; add to our database and update all replicas in the next heartbeat
-                print 'applied to err thang...?'
+                # ... apply that entry to our local db and reset ack_count
+                entry = self.log[self.last_applied]
+                self.key_store[entry['key']] = entry['value']
+                self.last_applied += 1
+                self.ack_count = 0
+                self.send_message(entry['client'], 'ok', entry['value'])
 
+        return
 
     def handle_messages(self):
         while len(self.messages) > 0:
@@ -266,7 +289,7 @@ class KVStore:
                 elif msg['type'] == 'put':
                     # TODO ; if put() is successful, send an 'ok'
                     # TODO ; if a put() fails, send a 'fail' and retry
-                    self.put(msg['key'], msg['value'], msg['term'])
+                    self.put(msg['src'], msg['key'], msg['value'], msg['term'])
                     print 'doing put stuff'
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
@@ -285,7 +308,8 @@ class KVStore:
                         msg['prev_log_index'],
                         msg['prev_log_term'],
                         msg['term'],
-                        msg['leader_commit_index']
+                        msg['leader_commit_index'],
+                        msg['leader_last_applied']
                     )
 
                 # ... or if we are asked to cast a vote
