@@ -241,8 +241,12 @@ class KVStore:
             self.next_index[src] = replica_commit_index + 1
 
             # If the replica's log is up to date, increment our ack_count
-            if self.commit_index == replica_commit_index:
+            if self.last_applied + 1 <= replica_commit_index:
                 self.ack_count += 1
+
+            if self.ack_count > len(self.replicas) + 1:
+                # TODO ; add to our database and update all replicas in the next heartbeat
+                print 'applied to err thang...?'
 
 
     def handle_messages(self):
