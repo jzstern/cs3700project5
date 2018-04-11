@@ -54,7 +54,7 @@ class KVStore:
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
     def request_vote(self):
-        print "{0}     requesting votes, term {1}".format(self.id, self.term)
+        #print "{0}     requesting votes, term {1}".format(self.id, self.term)
         # wipe out any old votes before starting a new election
         self.leader = 'FFFF'
         self.votes = [self.id] # vote for urself tho
@@ -65,7 +65,7 @@ class KVStore:
         return
 
     def cast_vote(self, ID, term):
-        print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
+        #print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
         self.term = term
         self.leader = 'FFFF'
         self.send_message(ID, 'cast_vote')
@@ -76,11 +76,11 @@ class KVStore:
         # if the sender has not voted for me yet, add the vote to my list of votes
         if src not in self.votes:
             self.votes.append(str(src))
-            print "{0}     {1} voted for me".format(self.id, src)
+            #print "{0}     {1} voted for me".format(self.id, src)
 
         # if majority voted for me
         if len(self.votes) > (len(self.replicas) / 2) + 1:
-            print "{0}     I am elected, term {1}".format(self.id, self.term)
+            #print "{0}     I am elected, term {1}".format(self.id, self.term)
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
@@ -94,7 +94,7 @@ class KVStore:
             # Tell everyone I'm the BOSS
             self.send_heartbeat()
 
-        print "{0}     votes: {1}".format(self.id, self.votes)
+        #print "{0}     votes: {1}".format(self.id, self.votes)
         return
 
     def send_message(self, dest, type, value={}):
@@ -156,7 +156,7 @@ class KVStore:
         if len(msg_raw) == 0:
            return
 
-        print self.id + '     ' + msg_raw
+        #print self.id + '     ' + msg_raw
         msg = json.loads(msg_raw)
         self.messages.append(msg)
         return
@@ -287,7 +287,6 @@ class KVStore:
                     # TODO ; if a put() fails, send a 'fail' and retry
 
                     self.put(msg['src'], msg['key'], msg['value'], msg['term'])
-                    print 'doing put stuff'
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
@@ -316,12 +315,8 @@ class KVStore:
 
                 # ... or if someone casts a vote for us
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
-                    print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
+                    #print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
                     self.handle_vote(msg['src'])
-
-            # Handle noop messages. This may be removed from your final implementation
-            #elif msg['type'] == 'noop':
-                #print '%s received a NOOP from %s' % (msg['dst'], msg['src'])
     
     def listen(self):
         last = 0
@@ -334,36 +329,22 @@ class KVStore:
             self.handle_messages()
 
             clock = time.time()
-            '''if self.state == 'candidate':
-                print self.id + "     " + "time since split vote timeout " + str(clock - self.election_start_time)
-                print self.id + "     " + "split vote timeout " + str(self.election_timeout)'''
 
             # If I am a follower and I haven't heard from the leader for the length of timeout, try to elect myself
             if self.state == 'follower' and clock - self.last_leader_msg >= self.timeout:
-                #print self.id + "     " + "time passed since we heard from leader" + str(clock - self.lastLeaderMsg)
-                #print self.id + "     " + "timeout " + str(self.timeout)
-                print "{0}     Havent heard from our leader, timeout".format(self.id)
+                #print "{0}     Havent heard from our leader, timeout".format(self.id)
                 self.request_vote()
 
             # If an election lasts longer than our election timeout, try to re-elect myself
             # "split vote"
             if self.state == 'candidate' and clock - self.election_start_time >= self.election_timeout:
-                print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
-                print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
+                #print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
+                #print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
                 self.request_vote()
 
             # If I haven't sent a heartbeat in awhile, send one
             if self.state == 'leader' and clock - self.last_heartbeat_sent >= self.heartbeat_timeout:
                 self.send_heartbeat()
-
-            '''if clock-last > 2:
-                # Send a no-op message to a random peer every two seconds, just for fun
-                # You definitely want to remove this from your implementation
-                msg = {'src': self.id, 'dst': random.choice(self.replicas), 'leader': 'FFFF', 'type': 'noop'}
-                self.sock.send(json.dumps(msg))
-                #print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
-                last = clock'''
-
 
 if __name__ == "__main__":
     init_id = sys.argv[1]
