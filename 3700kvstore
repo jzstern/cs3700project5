@@ -24,10 +24,12 @@ class KVStore:
         self.log = []
         # Dict containing key value pairs as requested by the client
         self.key_store = {}
-        # Index of the last thing I committed
+        # Index of the last thing I committed to my log
         self.commit_index = 0
-        # Index of the last thing committed to the state machine
+        # Index of the last thing applied to the state machine
         self.last_applied = 0
+        # Number of replicas that have an updated to the next log entry we want to commit
+        self.ack_count = 0
         # Dict { replica_id: next_index } representing the next log entry to send for each replica
         self.next_index = {}
         # List of indexes of the highest log entry known to be replicated on each replica
@@ -115,6 +117,7 @@ class KVStore:
                 'term': self.term
             }
 
+        # Heartbeat message
         if type == 'append_entries':
             prev_log_index = self.next_index[dest] - 1
 
@@ -122,7 +125,7 @@ class KVStore:
                 'entries': self.log[prev_log_index:],  # sus but shorthand
                 'prev_log_index': prev_log_index,
                 'prev_log_term': self.log[prev_log_index - 1]['term'],
-                'leader_commit': self.commit_index
+                'leader_commit_index': self.commit_index
             })
 
         elif type == 'ok':
@@ -179,16 +182,17 @@ class KVStore:
 
     def put(self, key, value, term):
         self.log.append({'key': key, 'value': value, 'term': term})
+        self.commit_index += 1
         return
 
-    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit):
+    def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
         identical_logs = True
         self.last_leader_msg = time.time()
 
         # Reply false if the heartbeat term is less than our term (1)
         if term < self.term:
             identical_logs = False
-            self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'my_last_index': len(self.log)})
+            self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
             return
 
         # If our prev_log_index is in range of our current log... (2)
@@ -215,22 +219,31 @@ class KVStore:
             else:
                 identical_logs = False
 
-        # (5)
-        if leader_commit > self.commit_index:
-            self.commit_index = min(leader_commit, len(self.log))
+        # Update our commit_index to be the length of our current log
+        self.commit_index = len(self.log)
 
-        self.send_message(self.leader, 'ack', identical_logs)
+        # (5)
+        if leader_commit_index > self.commit_index:
+            self.commit_index = min(leader_commit_index, len(self.log))
+
+        self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
         self.last_leader_msg = time.time()
         return
 
-    def handle_ack(self, src, identical_logs, replica_last_index):
+    def handle_ack(self, src, identical_logs, replica_commit_index):
         # If a replica's log isn't identical to mine (leader's)...
         if not identical_logs:
             # ... decrement their next_index
             self.next_index[src] -= 1
+            return
         else:
             # ... but if they match, update their next_index
-            self.next_index[src] = replica_last_index + 1
+            self.next_index[src] = replica_commit_index + 1
+
+            # If the replica's log is up to date, increment our ack_count
+            if self.commit_index == replica_commit_index:
+                self.ack_count += 1
+
 
     def handle_messages(self):
         while len(self.messages) > 0:
@@ -252,7 +265,7 @@ class KVStore:
                     self.put(msg['key'], msg['value'], msg['term'])
                     print 'doing put stuff'
                 elif msg['type'] == 'ack':
-                    self.handle_ack(msg['src'], msg['identical_logs'], msg['my_last_index'])
+                    self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
             # If I'm not the leader and I receive a get() or put() request...
             elif msg['type'] in ['get', 'put']:
@@ -268,7 +281,7 @@ class KVStore:
                         msg['prev_log_index'],
                         msg['prev_log_term'],
                         msg['term'],
-                        msg['leader_commit']
+                        msg['leader_commit_index']
                     )
 
                 # ... or if we are asked to cast a vote
