@@ -186,11 +186,11 @@ class KVStore:
         self.send_message(client, 'ok', value, MID)
         return
 
-    def put(self, client, key, value, term, mid):
+    def put(self, client, key, value, mid):
         self.log.append({
             'key': key,
             'value': value,
-            'term': term,
+            'term': self.term,
             'client': client,
             'MID': mid
         })
@@ -296,7 +296,7 @@ class KVStore:
                 elif msg['type'] == 'put':
                     # TODO ; if a put() fails, send a 'fail' and retry
 
-                    self.put(msg['src'], msg['key'], msg['value'], msg['term'], msg['MID'])
+                    self.put(msg['src'], msg['key'], msg['value'], msg['MID'])
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
