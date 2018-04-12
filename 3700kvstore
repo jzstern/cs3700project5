@@ -54,7 +54,7 @@ class KVStore:
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
     def request_vote(self):
-        #print "{0}     requesting votes, term {1}".format(self.id, self.term)
+        print "{0}     requesting votes, term {1}".format(self.id, self.term)
         # wipe out any old votes before starting a new election
         self.leader = 'FFFF'
         self.votes = [self.id] # vote for urself tho
@@ -65,7 +65,7 @@ class KVStore:
         return
 
     def cast_vote(self, ID, term):
-        #print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
+        print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
         self.term = term
         self.leader = 'FFFF'
         self.send_message(ID, 'cast_vote')
@@ -76,7 +76,7 @@ class KVStore:
         # if the sender has not voted for me yet, add the vote to my list of votes
         if src not in self.votes:
             self.votes.append(str(src))
-            #print "{0}     {1} voted for me".format(self.id, src)
+            print "{0}     {1} voted for me".format(self.id, src)
 
         # if majority voted for me
         if len(self.votes) > (len(self.replicas) / 2) + 1:
@@ -287,7 +287,7 @@ class KVStore:
         if len(msg_raw) == 0:
            return
 
-        #print self.id + '     ' + msg_raw
+        print self.id + '     ' + msg_raw
         msg = json.loads(msg_raw)
         self.messages.append(msg)
         return
@@ -295,7 +295,6 @@ class KVStore:
     def handle_messages(self):
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
-            print self.id + '     ' + msg
 
             if 'term' in msg:
                 self.check_leadership(msg['src'], msg['leader'], msg['term'], msg['type'])
@@ -338,7 +337,7 @@ class KVStore:
 
                 # ... or if someone casts a vote for us
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
-                    #print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
+                    print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
                     self.handle_vote(msg['src'])
 
         return
@@ -355,14 +354,14 @@ class KVStore:
 
             # If I am a follower and I haven't heard from the leader for the length of timeout, try to elect myself
             if self.state == 'follower' and clock - self.last_leader_msg >= self.timeout:
-                #print "{0}     Havent heard from our leader, timeout".format(self.id)
+                print "{0}     Haven't heard from our leader, timeout".format(self.id)
                 self.request_vote()
 
             # If an election lasts longer than our election timeout, try to re-elect myself
             # "split vote"
             if self.state == 'candidate' and clock - self.election_start_time >= self.election_timeout:
-                #print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
-                #print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
+                print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
+                print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
                 self.request_vote()
 
             # If I haven't sent a heartbeat in awhile, send one
