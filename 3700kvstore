@@ -143,7 +143,7 @@ class KVStore:
             msg.update({
                 'entries': self.log[prev_log_index:],  # sus but shorthand
                 'prev_log_index': prev_log_index,
-                'prev_log_term': self.log[prev_log_index]['term'],
+                'prev_log_term': self.log[prev_log_index]['term'],          # TODO ; do we need a -1 here???
                 'leader_commit_index': self.commit_index,
                 'leader_last_applied': self.last_applied
             })
