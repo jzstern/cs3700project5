@@ -80,7 +80,7 @@ class KVStore:
 
         # if majority voted for me
         if len(self.votes) > (len(self.replicas) / 2) + 1:
-            #print "{0}     I am elected, term {1}".format(self.id, self.term)
+            print "{0}     I'M THE BOWSS BITCEHESZZZZ, term {1}".format(self.id, self.term)
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
@@ -94,7 +94,7 @@ class KVStore:
             # Tell everyone I'm the BOSS
             self.send_heartbeat()
 
-        #print "{0}     votes: {1}".format(self.id, self.votes)
+        print "{0}     voted for me: {1}".format(self.id, self.votes)
         return
 
     def check_leadership(self, msg_source, msg_leader, msg_term, msg_type):
