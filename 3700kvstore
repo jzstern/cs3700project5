@@ -275,7 +275,7 @@ class KVStore:
 
         return
 
-    def receive_messages(self, ready):
+    def receive_messages(self):
         msg_raw = self.sock.recv(32768)
 
         if len(msg_raw) == 0:
@@ -332,12 +332,14 @@ class KVStore:
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
                     #print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
                     self.handle_vote(msg['src'])
+
+        return
     
     def listen(self):
         while True:
             ready = select.select([self.sock], [], [], 0.1)[0]
             if self.sock in ready:
-                self.receive_messages(ready)
+                self.receive_messages()
 
             self.handle_messages()
 
@@ -358,6 +360,8 @@ class KVStore:
             # If I haven't sent a heartbeat in awhile, send one
             if self.state == 'leader' and clock - self.last_heartbeat_sent >= self.heartbeat_timeout:
                 self.send_heartbeat()
+                
+        return
 
 if __name__ == "__main__":
     init_id = sys.argv[1]
