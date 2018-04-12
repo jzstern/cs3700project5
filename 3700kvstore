@@ -293,14 +293,9 @@ class KVStore:
         return
 
     def handle_messages(self):
-        count = 0
-
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
-
-            print msg
-            print count
-            count += 1
+            print self.id + '     ' + msg
 
             if 'term' in msg:
                 self.check_leadership(msg['src'], msg['leader'], msg['term'], msg['type'])
