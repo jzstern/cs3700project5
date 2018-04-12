@@ -141,13 +141,22 @@ class KVStore:
         if type == 'append_entries':
             prev_log_index = self.next_index[dest] - 1
 
-            msg.update({
-                'entries': self.log[prev_log_index:],  # sus but shorthand
-                'prev_log_index': prev_log_index,
-                'prev_log_term': self.log[prev_log_index - 1]['term'],          # TODO ; do we need a -1 here???
-                'leader_commit_index': self.commit_index,
-                'leader_last_applied': self.last_applied
-            })
+            if len(self.log) == 0:
+                msg.update({
+                    'entries': [],
+                    'prev_log_index': prev_log_index,
+                    'prev_log_term': '',                                            # TODO idk
+                    'leader_commit_index': self.commit_index,
+                    'leader_last_applied': self.last_applied
+                })
+            else:
+                msg.update({
+                    'entries': self.log[prev_log_index:],  # sus but shorthand
+                    'prev_log_index': prev_log_index,
+                    'prev_log_term': self.log[prev_log_index - 1]['term'],          # TODO ; do we need a -1 here???
+                    'leader_commit_index': self.commit_index,
+                    'leader_last_applied': self.last_applied
+                })
 
         elif type == 'ok':
             msg.update({'value': value})
@@ -167,8 +176,11 @@ class KVStore:
         self.last_heartbeat_sent = time.time()
 
     def handle_heartbeat(self, entries, prev_log_index, prev_log_term, term, leader_commit_index, leader_last_applied):
-        self.update_log(entries, prev_log_index, prev_log_term, term, leader_commit_index)
-        self.update_keystore(leader_last_applied)
+        self.last_leader_msg = time.time()
+
+        if len(entries) > 0:
+            self.update_log(entries, prev_log_index, prev_log_term, term, leader_commit_index)
+            self.update_keystore(leader_last_applied)
         return
 
     def handle_ack(self, src, identical_logs, replica_commit_index):
@@ -217,7 +229,6 @@ class KVStore:
 
     def update_log(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
         identical_logs = True
-        self.last_leader_msg = time.time()
 
         # Reply false if the heartbeat term is less than our term (1)
         if term < self.term:
@@ -261,7 +272,6 @@ class KVStore:
             self.commit_index = min(leader_commit_index, len(self.log))
 
         self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
-        self.last_leader_msg = time.time()
         return
 
     def update_keystore(self, leader_last_applied):
