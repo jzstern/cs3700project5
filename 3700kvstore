@@ -287,8 +287,15 @@ class KVStore:
         return
 
     def handle_messages(self):
+        count = 0
+
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
+
+            print 'msg'
+            print count
+            count += 1
+
             if 'term' in msg:
                 self.check_leadership(msg['src'], msg['leader'], msg['term'])
 
@@ -360,7 +367,7 @@ class KVStore:
             # If I haven't sent a heartbeat in awhile, send one
             if self.state == 'leader' and clock - self.last_heartbeat_sent >= self.heartbeat_timeout:
                 self.send_heartbeat()
-                
+
         return
 
 if __name__ == "__main__":
