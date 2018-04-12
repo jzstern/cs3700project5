@@ -7,6 +7,9 @@ class KVStore:
         # Socket connection
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         # Message buffer
+        self.id = id
+        # The ID numbers of all the other replicas
+        self.replicas = replicas
         self.messages = []
         # Timeout in milliseconds
         self.timeout = random.randint(150, 300) / float(1000)
@@ -14,10 +17,9 @@ class KVStore:
         self.election_timeout = random.randint(50, 125) / float(1000)
         # Time between heartbeat messages (in seconds)
         self.heartbeat_timeout = .1
+        # Time I sent the last heartbeat message
+        self.last_heartbeat_sent = time.time()
         # Instance ID number
-        self.id = id
-        # The ID numbers of all the other replicas
-        self.replicas = replicas
         # The current election term across all replicas
         self.term = 0
         # A list of dictionaries containing a command, the term it was called, and a log index
@@ -46,8 +48,6 @@ class KVStore:
         self.last_leader_msg = time.time()
         # Time that the most recent election I was a candidate for started
         self.election_start_time = ''
-        # Time I sent the last heartbeat message
-        self.last_heartbeat_sent = time.time()
 
         # Connect to the network. All messages to/from other replicas and clients will occur over this socket
         self.sock.connect(self.id)
@@ -162,9 +162,7 @@ class KVStore:
 
     def send_heartbeat(self):
         for replica in self.replicas:
-            # Check to ensure the replica needs it's log updated
-            if len(self.log) >= self.next_index[replica]:
-                self.send_message(replica, 'append_entries')
+            self.send_message(replica, 'append_entries')
 
         self.last_heartbeat_sent = time.time()
 
