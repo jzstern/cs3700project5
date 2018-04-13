@@ -32,7 +32,7 @@ class KVStore:
         self.last_applied = 0
         # Number of replicas that have an updated to the next log entry we want to commit
         self.ack_count = 0
-        # Dict { replica_id: next_index } representing the last log entry in each replica's log
+        # Dict { replica_id: next_index } representing the index of the next log entry to send to each replica
         self.next_index = {}
         # List of indexes of the highest entry known to be replicated in the keystore of each replica
         self.match_index = []
@@ -140,6 +140,7 @@ class KVStore:
         if type == 'append_entries':
             prev_log_index = self.next_index[dest] - 1
 
+            # If it's a blank heartbeat message
             if len(self.log) == 0:
                 msg.update({
                     'entries': [],
@@ -148,6 +149,7 @@ class KVStore:
                     'leader_commit_index': self.commit_index,
                     'leader_last_applied': self.last_applied
                 })
+            # If there are entries to add
             else:
                 msg.update({
                     'entries': self.log[prev_log_index:],  # sus but shorthand
@@ -235,10 +237,13 @@ class KVStore:
         if term < self.term:
             identical_logs = False
             self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
+            print self.id + '     FALSE - inconsistent logs '
             return
 
+        # If our log is empty...
         if len(self.log) == 0:
             for entry in entries:
+                # ... add the entries from our leader to our log
                 self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
                 print self.id + '     I just logged ' + str(entry['value'])
 
@@ -251,22 +256,24 @@ class KVStore:
                 i = 0
 
                 for entry in entries:
-                    # If the leader's entry at this index doesn't conflict ours...
-                    if len(self.log) > prev_log_index + i and self.log[prev_log_index + i]['term'] == entry['term']:
-                        # ... add it to our log
+
+                    # If we are trying to add an entry with the same index as an existing entry but different term...
+                    if len(self.log) >= prev_log_index + i and self.log[prev_log_index + i]['term'] != entry['term']:
+                        # ... delete that entry and everything following
+                        self.log = self.log[:prev_log_index + i]
+                        print self.id + '     I just deleted some stuff from my log'
+
+                    # Otherwise, add it to our log
+                    else:
                         self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
                         print self.id + '     I just logged ' + str(entry['value'])
-
-                    # Delete the existing entry and all that follow
-                    else:
-                        self.log = self.log[:prev_log_index + i]
-                        print self.id + '     I just deleted some stuff'
 
                     i += 1
 
             # If the terms don't match up, then our logs are fucked
             else:
                 identical_logs = False
+                print self.id + '     FALSE - inconsistent logs (they fucked)'
 
         # Update our commit_index to be the length of our current log
         self.commit_index = len(self.log)
