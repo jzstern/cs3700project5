@@ -240,6 +240,7 @@ class KVStore:
         if len(self.log) == 0:
             for entry in entries:
                 self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
+                print self.id + '     I just logged ' + str(entry['value'])
 
         # If our prev_log_index is in range of our current log... (2)
         elif prev_log_index <= len(self.log):
@@ -254,10 +255,12 @@ class KVStore:
                     if len(self.log) > prev_log_index + i and self.log[prev_log_index + i]['term'] == entry['term']:
                         # ... add it to our log
                         self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
+                        print self.id + '     I just logged ' + str(entry['value'])
 
                     # Delete the existing entry and all that follow
                     else:
                         self.log = self.log[:prev_log_index + i]
+                        print self.id + '     I just deleted some stuff'
 
                     i += 1
 
@@ -280,6 +283,7 @@ class KVStore:
             for entry in self.log[self.last_applied - 1:]:
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
+                print self.id + '     I just applied ' + str(entry['value'])
 
         # self.send_message(self.leader, 'ack', {'identical_logs': True, 'commit_index': self.commit_index})
 
@@ -292,6 +296,7 @@ class KVStore:
            return
 
         print self.id + '     ' + msg_raw
+        print ''
         msg = json.loads(msg_raw)
         self.messages.append(msg)
         return
