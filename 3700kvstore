@@ -98,17 +98,16 @@ class KVStore:
         return
 
     def check_leadership(self, msg_source, msg_leader, msg_term, msg_type):
-        # If we receive a message with a higher term...
-        if msg_source == msg_leader and msg_term >= self.term or (msg_type == 'append_entries' and msg_leader != self.leader):
+        # If we receive a message with a higher term or we get a heartbeat from a different leader than our own....
+        if msg_source == msg_leader and msg_term > self.term or (msg_type == 'append_entries' and msg_leader != self.leader):
             # ... make that replica our leader
-
             self.leader = msg_source
 
             # Update our term and state
             self.term = msg_term
             self.state = 'follower'
 
-            print "{0}     Elected a new leader: {1}".format(self.id, self.leader)
+            print "{0}     Updated our leader: {1}".format(self.id, self.leader)
         return
 
     def send_message(self, dest, type, value={}, MID=''):
