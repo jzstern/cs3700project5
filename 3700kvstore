@@ -317,6 +317,7 @@ class KVStore:
             # If I'm not the leader and I receive a get() or put() request...
             elif msg['type'] in ['get', 'put']:
                 # ... redirect it to the leader
+                print self.id + '     Redirecting client to leader...'
                 self.send_message(msg['src'], 'redirect', MID=msg['MID'])
 
             # We are not the leader but...
