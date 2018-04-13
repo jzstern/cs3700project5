@@ -54,7 +54,7 @@ class KVStore:
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
     def request_vote(self):
-        print "{0}     requesting votes, term {1}".format(self.id, self.term)
+        # print "{0}     requesting votes, term {1}".format(self.id, self.term)
         # wipe out any old votes before starting a new election
         self.leader = 'FFFF'
         self.votes = [self.id] # vote for urself tho
@@ -65,7 +65,7 @@ class KVStore:
         return
 
     def cast_vote(self, ID, term):
-        print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
+        # print "{0}     casting vote for {1}, term {2}".format(self.id, ID, self.term)
         self.term = term
         self.leader = 'FFFF'
         self.send_message(ID, 'cast_vote')
@@ -76,11 +76,11 @@ class KVStore:
         # if the sender has not voted for me yet, add the vote to my list of votes
         if src not in self.votes:
             self.votes.append(str(src))
-            print "{0}     {1} voted for me".format(self.id, src)
+            # print "{0}     {1} voted for me".format(self.id, src)
 
         # if majority voted for me
         if len(self.votes) > (len(self.replicas) / 2) + 1:
-            print "{0}     I'M THE BOWSS BITCEHESZZZZ, term {1}".format(self.id, self.term)
+            # print "{0}     I'M THE BOWSS BITCEHESZZZZ, term {1}".format(self.id, self.term)
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
@@ -94,7 +94,7 @@ class KVStore:
             # Tell everyone I'm the BOSS
             self.send_heartbeat()
 
-        print "{0}     voted for me: {1}".format(self.id, self.votes)
+        # print "{0}     voted for me: {1}".format(self.id, self.votes)
         return
 
     def check_leadership(self, msg_source, msg_leader, msg_term, msg_type):
@@ -107,7 +107,7 @@ class KVStore:
             self.term = msg_term
             self.state = 'follower'
 
-            print "{0}     Updated our leader: {1}".format(self.id, self.leader)
+            # print "{0}     Updated our leader: {1}".format(self.id, self.leader)
         return
 
     def send_message(self, dest, type, value={}, MID=''):
@@ -237,7 +237,7 @@ class KVStore:
         if term < self.term:
             identical_logs = False
             self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
-            print self.id + '     FALSE - inconsistent logs '
+            # print self.id + '     FALSE - inconsistent logs '
             return
 
         # If our log is empty...
@@ -245,7 +245,7 @@ class KVStore:
             for entry in entries:
                 # ... add the entries from our leader to our log
                 self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
-                print self.id + '     I just logged ' + str(entry['value'])
+                # print self.id + '     I just logged ' + str(entry['value'])
 
         # If our prev_log_index is in range of our current log... (2)
         elif prev_log_index <= len(self.log):
@@ -261,19 +261,19 @@ class KVStore:
                         if self.log[prev_log_index + i]['term'] != entry['term']:
                             # ... delete that entry and everything following
                             self.log = self.log[:prev_log_index + i]
-                            print self.id + '     I just deleted some stuff from my log'
+                            # print self.id + '     I just deleted some stuff from my log'
 
                     # Otherwise, add it to our log
                     else:
                         self.log.append({'key': entry['key'], 'value': entry['value'], 'term': entry['term']})
-                        print self.id + '     I just logged ' + str(entry['value'])
+                        # print self.id + '     I just logged ' + str(entry['value'])
 
                     i += 1
 
             # If the terms don't match up, then our logs are fucked
             else:
                 identical_logs = False
-                print self.id + '     FALSE - inconsistent logs (they fucked)'
+                # print self.id + '     FALSE - inconsistent logs (they fucked)'
 
         # Update our commit_index to be the length of our current log
         self.commit_index = len(self.log)
@@ -290,7 +290,7 @@ class KVStore:
             for entry in self.log[self.last_applied - 1:]:
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
-                print self.id + '     I just applied ' + str(entry['value'])
+                # print self.id + '     I just applied ' + str(entry['value'])
 
         # self.send_message(self.leader, 'ack', {'identical_logs': True, 'commit_index': self.commit_index})
 
@@ -302,8 +302,8 @@ class KVStore:
         if len(msg_raw) == 0:
            return
 
-        print self.id + '     ' + msg_raw
-        print ''
+        # print self.id + '     ' + msg_raw
+        # print ''
         msg = json.loads(msg_raw)
         self.messages.append(msg)
         return
@@ -344,7 +344,7 @@ class KVStore:
                 # ... we received a get() or put() request...
                 elif msg['type'] in ['get', 'put']:
                     # ... redirect it to the leader
-                    print self.id + '     Redirecting client to leader...'
+                    # print self.id + '     Redirecting client to leader...'
                     self.send_message(msg['src'], 'redirect', MID=msg['MID'])
 
                 # ... or if we are asked to cast a vote
@@ -354,7 +354,7 @@ class KVStore:
 
                 # ... or if someone casts a vote for us
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
-                    print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
+                    # print"{0}    I got a vote from {1} woohoo lets handle it!".format(self.id, msg['src'])
                     self.handle_vote(msg['src'])
 
         return
@@ -371,14 +371,14 @@ class KVStore:
 
             # If I am a follower and I haven't heard from the leader for the length of timeout, try to elect myself
             if self.state == 'follower' and clock - self.last_leader_msg >= self.timeout:
-                print "{0}     Haven't heard from our leader, timeout".format(self.id)
+                # print "{0}     Haven't heard from our leader, timeout".format(self.id)
                 self.request_vote()
 
             # If an election lasts longer than our election timeout, try to re-elect myself
             # "split vote"
             if self.state == 'candidate' and clock - self.election_start_time >= self.election_timeout:
-                print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
-                print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
+                # print "{0}     SPLIT VOTE TIMEOUT".format(self.id)
+                # print self.id + "     " + "split vote timeout " + str(clock - self.election_start_time)
                 self.request_vote()
 
             # If I haven't sent a heartbeat in awhile, send one
