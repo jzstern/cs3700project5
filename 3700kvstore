@@ -257,7 +257,7 @@ class KVStore:
 
                 for entry in entries:
                     # If we are trying to add an entry with the same index as an existing entry but different term...
-                    if len(self.log) >= prev_log_index + i:
+                    if len(self.log) > prev_log_index + i:
                         if self.log[prev_log_index + i]['term'] != entry['term']:
                             # ... delete that entry and everything following
                             self.log = self.log[:prev_log_index + i]
