@@ -214,7 +214,7 @@ class KVStore:
         else:
             value = ''
         self.send_message(client, 'ok', value, MID)
-        print self.id + '     Getting value: ' + str(value)
+        #print self.id + '     Getting value: ' + str(value)
         return
 
     def put(self, client, key, value, MID):
@@ -227,7 +227,7 @@ class KVStore:
         })
         self.commit_index += 1
         self.ack_count += 1
-        print self.id + '     I just logged ' + str(self.log[len(self.log) - 1])
+        #print self.id + '     I just logged ' + str(self.log[len(self.log) - 1])
         return
 
     def update_log(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
