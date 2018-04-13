@@ -314,12 +314,6 @@ class KVStore:
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
-            # If I'm not the leader and I receive a get() or put() request...
-            elif msg['type'] in ['get', 'put']:
-                # ... redirect it to the leader
-                print self.id + '     Redirecting client to leader...'
-                self.send_message(msg['src'], 'redirect', MID=msg['MID'])
-
             # We are not the leader but...
             else:
                 # ... we got a heartbeat message
@@ -332,6 +326,12 @@ class KVStore:
                         msg['leader_commit_index'],
                         msg['leader_last_applied']
                     )
+
+                # ... we received a get() or put() request...
+                elif msg['type'] in ['get', 'put']:
+                    # ... redirect it to the leader
+                    print self.id + '     Redirecting client to leader...'
+                    self.send_message(msg['src'], 'redirect', MID=msg['MID'])
 
                 # ... or if we are asked to cast a vote
                 elif msg['type'] == 'req_vote':
