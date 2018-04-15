@@ -16,7 +16,7 @@ class KVStore:
         # Timeout to be used during a split vote
         self.election_timeout = random.randint(50, 125) / float(1000)
         # Time between heartbeat messages (in seconds)
-        self.heartbeat_timeout = .1
+        self.heartbeat_timeout = self.timeout / 100
         # Time I sent the last heartbeat message
         self.last_heartbeat_sent = time.time()
         # Instance ID number
@@ -222,6 +222,7 @@ class KVStore:
         return
 
     def put(self, client, key, value, MID):
+        # TODO: WHEREVER WE ADD TO LOG - MAKE SURE UNIQUE MID
         self.log.append({
             'key': key,
             'value': value,
@@ -252,7 +253,8 @@ class KVStore:
                     'key': entry['key'],
                     'value': entry['value'],
                     'term': entry['term'],
-                    'client': entry['client']
+                    'client': entry['client'],
+                    'MID': entry['MID']
                 })
                 self.my_print('I just logged ' + str(entry['value']))
 
@@ -278,7 +280,8 @@ class KVStore:
                             'key': entry['key'],
                             'value': entry['value'],
                             'term': entry['term'],
-                            'client': entry['client']
+                            'client': entry['client'],
+                            'MID': entry['MID']
                         })
                         self.my_print('I just logged ' + str(entry['value']))
 
@@ -296,7 +299,11 @@ class KVStore:
         if leader_commit_index > self.commit_index:
             self.commit_index = min(leader_commit_index, len(self.log))
 
-        self.send_message(self.leader, 'ack', {'identical_logs': identical_logs, 'commit_index': self.commit_index})
+        self.send_message(
+            self.leader,
+            'ack',
+            {'identical_logs': identical_logs, 'commit_index': self.commit_index}
+        )
         return
 
     def update_keystore(self, leader_last_applied):
@@ -358,7 +365,7 @@ class KVStore:
                 elif msg['type'] in ['get', 'put']:
                     # ... redirect it to the leader
                     self.my_print(self.id + '     Redirecting client to leader...')
-                    self.send_message(msg['src'], 'redirect', MID=msg['MID'])
+                    self.send_message(msg['src'], 'redirect', {}, msg['MID'])
 
                 # ... or if we are asked to cast a vote
                 elif msg['type'] == 'req_vote':
