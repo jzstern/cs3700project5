@@ -87,15 +87,15 @@ trials = []
 #trials.append(run_test('unreliable-3.json', '15% drops, no failures, 20% read',
 #                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.35, LATENCY_MID))
 
-print 'Crash failure tests (5 replicas, 30 seconds, 500 requests):'
-trials.append(run_test('crash-1.json', 'No drops, 1 replica failure, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.2, LATENCY_LOW))
-trials.append(run_test('crash-2.json', 'No drops, 2 replica failures, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.2, LATENCY_LOW))
-trials.append(run_test('crash-3.json', 'No drops, 1 leader failure, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.3, LATENCY_LOW))
-trials.append(run_test('crash-4.json', 'No drops, 2 leader failures, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.4, LATENCY_LOW))
+#print 'Crash failure tests (5 replicas, 30 seconds, 500 requests):'
+#trials.append(run_test('crash-1.json', 'No drops, 1 replica failure, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.2, LATENCY_LOW))
+#trials.append(run_test('crash-2.json', 'No drops, 2 replica failures, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.2, LATENCY_LOW))
+#trials.append(run_test('crash-3.json', 'No drops, 1 leader failure, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.3, LATENCY_LOW))
+#trials.append(run_test('crash-4.json', 'No drops, 2 leader failures, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.4, LATENCY_LOW))
 
 print 'Partition tests (5 replicas, 30 seconds, 500 requests):'
 trials.append(run_test('partition-1.json', 'No drops, 1 easy partition, 20% read',
