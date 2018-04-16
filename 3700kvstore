@@ -226,6 +226,7 @@ class KVStore:
         if not identical_logs:
             # ... decrement their next_index
             self.next_index[src] -= 1
+            self.send_message(src, 'append_entries')
         else:
             # ... but if they match, update their next_index
             self.next_index[src] = replica_commit_index + 1
@@ -305,7 +306,7 @@ class KVStore:
                             # ... delete that entry and everything following
                             self.log = self.log[:prev_log_index + i]
                             self.my_print('I just deleted some stuff from my log')
-
+                            break
                     # Otherwise, add it to our log
                     else:
                         self.log.append({
@@ -340,7 +341,7 @@ class KVStore:
 
     def update_keystore(self, leader_last_applied):
         if leader_last_applied > self.last_applied and len(self.log) > self.last_applied:
-            for entry in self.log[self.last_applied - 1:]:
+            for entry in self.log[self.last_applied - 1:]: #TODO : should this be -1??? idts...
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
                 self.my_print('I just applied ' + str(entry['value']))
