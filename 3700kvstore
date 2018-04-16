@@ -12,11 +12,11 @@ class KVStore:
         self.replicas = replicas
         self.messages = []
         # Timeout in milliseconds
-        self.timeout = random.randint(150, 300) / float(1000)
+        self.timeout = random.randint(250, 350) / float(1000)
         # Timeout to be used during a split vote
         self.election_timeout = random.randint(50, 125) / float(1000)
         # Time between heartbeat messages (in seconds)
-        self.heartbeat_timeout = self.timeout / 3
+        self.heartbeat_timeout = .04 #self.timeout / 3
         # Time I sent the last heartbeat message
         self.last_heartbeat_sent = time.time()
         # Instance ID number
@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        print "{0}     {1}".format(self.id, string)
+        #print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -342,8 +342,8 @@ class KVStore:
 
                 elif msg['type'] == 'put':
                     # TODO ; if a put() fails, send a 'fail' and retry
-
                     self.put(msg['src'], msg['key'], msg['value'], msg['MID'])
+
                 elif msg['type'] == 'ack':
                     self.handle_ack(msg['src'], msg['identical_logs'], msg['commit_index'])
 
@@ -362,9 +362,15 @@ class KVStore:
 
                 # ... we received a get() or put() request...
                 elif msg['type'] in ['get', 'put']:
-                    # ... redirect it to the leader
-                    self.my_print(self.id + '     Redirecting client to leader...')
-                    self.send_message(msg['src'], 'redirect', {}, msg['MID'])
+                    # ...if we have a leader...
+                    if self.leader != 'FFFF':
+                        # ... redirect it to the leader
+                        self.my_print(self.id + '     Redirecting client to leader...')
+                        self.send_message(msg['src'], 'redirect', {}, msg['MID'])
+                    # ...if we don't have a leader...
+                    else:
+                        # ... send a type "fail" message
+                        self.send_message(msg['src'], 'fail', {}, msg['MID'])
 
                 # ... or if we are asked to cast a vote
                 elif msg['type'] == 'req_vote':
