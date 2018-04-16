@@ -16,7 +16,7 @@ class KVStore:
         # Timeout to be used during a split vote
         self.election_timeout = random.randint(50, 125) / float(1000)
         # Time between heartbeat messages (in seconds)
-        self.heartbeat_timeout = self.timeout / 100
+        self.heartbeat_timeout = self.timeout / 3
         # Time I sent the last heartbeat message
         self.last_heartbeat_sent = time.time()
         # Instance ID number
@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        #print "{0}     {1}".format(self.id, string)
+        print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -314,7 +314,6 @@ class KVStore:
                 self.my_print('I just applied ' + str(entry['value']))
 
         # self.send_message(self.leader, 'ack', {'identical_logs': True, 'commit_index': self.commit_index})
-
         return
 
     def receive_messages(self):
@@ -380,7 +379,7 @@ class KVStore:
     
     def listen(self):
         while True:
-            ready = select.select([self.sock], [], [], 0.1)[0]
+            ready = select.select([self.sock], [], [], 0.01)[0]
             if self.sock in ready:
                 self.receive_messages()
 
