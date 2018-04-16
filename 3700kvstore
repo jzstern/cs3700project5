@@ -84,7 +84,7 @@ class KVStore:
             self.my_print("{0} voted for me".format(src))
 
         # if majority voted for me
-        if len(self.votes) > (len(self.replicas) / 2) + 1:
+        if len(self.votes) > (len(self.replicas) / 2):
             self.my_print("I'M THE BOWSS BITCEHESZZZZ, term {0}".format(self.term))
             # we are the leader!
             self.leader = self.id
