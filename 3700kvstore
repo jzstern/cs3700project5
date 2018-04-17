@@ -164,9 +164,9 @@ class KVStore:
                 })
             # If there are entries to add
             # If we have more than 10 entries to send them, just send 10.
-            elif len(self.log) - prev_log_index > 50:
+            elif len(self.log) - prev_log_index > 75:
                 msg.update({
-                    'entries': self.log[prev_log_index:prev_log_index + 50],
+                    'entries': self.log[prev_log_index:prev_log_index + 75],
                     'prev_log_index': prev_log_index,
                     'prev_log_term': self.log[prev_log_index - 1]['term'],
                     'leader_commit_index': self.commit_index,
