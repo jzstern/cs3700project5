@@ -216,7 +216,7 @@ class Client:
         del self.reqs[mid]
         self.leader = msg['leader']
         self.sim.stats.latencies.append(time.time() - req.ts)
-        print 'MESSAGE ID {0} TOOK {1}'.format(mid, time.time() - req.ts)
+        print '\nMESSAGE ID {0} TOOK {1}\n'.format(mid, time.time() - req.ts)
         
         # if this is a redirect or a fail, try again
         if msg['type'] in ['redirect', 'fail']:
@@ -410,16 +410,16 @@ class Simulation:
             r.remove(rid)
 
     def __partition_easy__(self):
-        print "EASY PARTITION TIME!"
+        print "\nEASY PARTITION TIME!\n"
         self.__partition__(True)
                         
     def __partition_hard__(self):
         self.__partition__()
-        print "HARD PARTITION TIME!"
+        print "\nHARD PARTITION TIME!\n"
 
     def __partition_end__(self):
         self.partition = None
-        print "HEALING PARTITION"
+        print "\nHEALING PARTITION\n"
 
     def __check_partition__(self, rid1, rid2):
         if not self.partition: return True

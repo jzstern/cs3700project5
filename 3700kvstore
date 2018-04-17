@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        print "{0}     {1}".format(self.id, string)
+        #print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -77,7 +77,6 @@ class KVStore:
         # we consider it more up to date if their last log entry has a higher term
         # than our last long entry OR if the terms are equal, if their log is at least
         # as long as ours
-        self.leader = 'FFFF'
         if (last_index == 0 and last_term == 0) or (last_term > self.log[len(self.log) - 1]['term']) or ((last_term == self.log[len(self.log) - 1]['term']) and (last_index >= len(self.log))): 
             self.my_print("casting vote for {0}, term {1}".format(ID, self.term))
             self.term = term
@@ -92,7 +91,7 @@ class KVStore:
             self.my_print("{0} voted for me".format(src))
 
         # if majority voted for me
-        if len(self.votes) > (len(self.replicas) / 2):
+        if len(self.votes) > (len(self.replicas) / 2): # > not >= bc self.votes includes candidate
             self.my_print("I'M THE BOWSS BITCEHESZZZZ, term {0}".format(self.term))
             # we are the leader!
             self.leader = self.id
@@ -208,7 +207,9 @@ class KVStore:
                 })
 
         self.MID += 1
-        #print json.dumps(msg)
+        #if msg['src'] not in replicas:
+        self.my_print("SENDING MESSAGE")
+        self.my_print(json.dumps(msg))
         self.sock.send(json.dumps(msg))
         return
 
@@ -241,7 +242,7 @@ class KVStore:
                 self.ack_count += 1
 
             # If over half our replicas have committed an entry...
-            if self.ack_count > (len(self.replicas) / 2): # no need for +1 bc leader counts
+            if self.ack_count >= (len(self.replicas) / 2): # no need for +1 bc leader counts
                 # ... apply that entry to our local db and reset ack_count
                 entry = self.log[self.last_applied]
                 self.key_store[entry['key']] = entry['value']
@@ -270,7 +271,7 @@ class KVStore:
         })
         self.commit_index += 1
         self.ack_count += 1
-        self.my_print('I just logged ' + str(self.log[len(self.log) - 1]))
+        #self.my_print('I just logged ' + str(self.log[len(self.log) - 1]))
         return
 
     def update_log(self, entries, prev_log_index, prev_log_term, term, leader_commit_index):
@@ -294,7 +295,7 @@ class KVStore:
                     'client': entry['client'],
                     'MID': entry['MID']
                 })
-                self.my_print('I just logged ' + str(entry['value']))
+                #self.my_print('I just logged ' + str(entry['value']))
 
         # If our prev_log_index is in range of our current log... (2)
         elif prev_log_index <= len(self.log):
@@ -310,7 +311,7 @@ class KVStore:
                         if self.log[prev_log_index + i]['term'] != entry['term']:
                             # ... delete that entry and everything following
                             self.log = self.log[:prev_log_index + i]
-                            self.my_print('I just deleted some stuff from my log')
+                            #self.my_print('I just deleted some stuff from my log')
                             break
                     # Otherwise, add it to our log
                     else:
@@ -321,7 +322,7 @@ class KVStore:
                             'client': entry['client'],
                             'MID': entry['MID']
                         })
-                        self.my_print('I just logged ' + str(entry['value']))
+                        #self.my_print('I just logged ' + str(entry['value']))
 
                     i += 1
 
@@ -349,9 +350,7 @@ class KVStore:
             for entry in self.log[self.last_applied - 1:]: #TODO : should this be -1??? idts...
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
-                self.my_print('I just applied ' + str(entry['value']))
-
-        # self.send_message(self.leader, 'ack', {'identical_logs': True, 'commit_index': self.commit_index})
+                #self.my_print('I just applied ' + str(entry['value']))
         return
 
     def receive_messages(self):
@@ -360,7 +359,8 @@ class KVStore:
         if len(msg_raw) == 0:
            return
 
-        self.my_print(self.id + '     ' + msg_raw)
+        self.my_print("RECEIVED A MESSAGE")
+        self.my_print('     ' + msg_raw)
         msg = json.loads(msg_raw)
         self.messages.append(msg)
         return
@@ -401,7 +401,6 @@ class KVStore:
                     # ...if we have a leader...
                     if self.leader != 'FFFF':
                         # ... redirect it to the leader
-                        self.my_print('Redirecting client to leader...')
                         self.send_message(msg['src'], 'redirect', {}, msg['MID'])
                     # ...if we don't have a leader...
                     else:
@@ -410,8 +409,10 @@ class KVStore:
 
                 # ... or if we are asked to cast a vote
                 elif msg['type'] == 'req_vote':
-                    if self.state == 'follower' and msg['term'] > self.term:
-                        self.cast_vote(msg['src'], msg['term'], msg['last_index'], msg['last_term'])
+                    if self.state == 'follower':
+                        self.leader = 'FFFF'
+                        if msg['term'] > self.term:
+                            self.cast_vote(msg['src'], msg['term'], msg['last_index'], msg['last_term'])
 
                 # ... or if someone casts a vote for us
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
