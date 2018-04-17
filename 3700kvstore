@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        print "{0}     {1}".format(self.id, string)
+        #print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -110,10 +110,9 @@ class KVStore:
         self.my_print("{0} voted for me".format(self.votes))
         return
 
-    def check_leadership(self, msg_source, msg_leader, msg_term, msg_type):
+    def check_leadership(self, msg_source, msg_leader, msg_term, msg_type, leader_commit_index):
         # If we receive a message with a higher term or we get a heartbeat from a different leader than our own....
-        if (msg_type == 'append_entries') and ((self.state == 'follower') or \
-                (self.state == 'candidate' and msg_term >= self.term)):
+        if ((self.state == 'follower') or (self.state == 'candidate' and (msg_term >= self.term or leader_commit_index >= self.commit_index))):
             # ... make that replica our leader
             self.leader = msg_source
 
@@ -365,9 +364,6 @@ class KVStore:
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
 
-            if 'term' in msg:
-                self.check_leadership(msg['src'], msg['leader'], msg['term'], msg['type'])
-
             # If I am the leader...
             if self.state == 'leader':
                 if msg['type'] == 'get':
@@ -385,6 +381,7 @@ class KVStore:
             else:
                 # ... we got a heartbeat message
                 if msg['type'] == 'append_entries':
+                    self.check_leadership(msg['src'], msg['leader'], msg['term'], msg['type'], msg['leader_commit_index'])
                     self.handle_heartbeat(
                         msg['entries'],
                         msg['prev_log_index'],
