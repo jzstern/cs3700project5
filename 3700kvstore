@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        #print "{0}     {1}".format(self.id, string)
+        print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -237,17 +237,35 @@ class KVStore:
             # ... but if they match, update their next_index
             self.next_index[src] = replica_commit_index + 1
 
-            # If the replica's log is up to date, increment our ack_count
-            if self.last_applied + 1 <= replica_commit_index:
-                self.ack_count += 1
+            # see if they committed the entries we wanna apply so we can 
+            # increment our ack counts for the entries
+            index_to_apply = self.last_applied + 1 # index of next entry we wanna apply
+            while True:
+                # if the index is greater than their commit index, they haven't committed
+                # the entry. we cannot increment any acks, so break out of the loop
+                if index_to_apply > replica_commit_index:
+                    break
 
-            # If over half our replicas have committed an entry...
-            if self.ack_count >= (len(self.replicas) / 2): # no need for +1 bc leader counts
-                # ... apply that entry to our local db and reset ack_count
-                entry = self.log[self.last_applied]
+                if len(self.log) >= index_to_apply:
+                    # if we got here, the index to apply <= replica's commit index
+                    # this means they committed what we wanna apply, so let's add an ack
+                    # to its count and check the next thing we wanna apply.
+                    self.log[index_to_apply - 1]['ack'] += 1
+                    index_to_apply += 1
+                else:
+                    break
+            
+            while True:
+                if len(self.log) > self.last_applied:
+                    # the entry to apply to our store
+                    entry = self.log[self.last_applied]
+                else:
+                    break
+                # if we do not have enough acks to apply this, exit the loop
+                if entry['ack'] < (len(self.replicas) / 2): # dont use +1 bc assume leader acked
+                    break
                 self.key_store[entry['key']] = entry['value']
                 self.last_applied += 1
-                self.ack_count = 0
                 self.send_message(entry['client'], 'ok', entry['value'], entry['MID'])
         return
 
@@ -267,7 +285,8 @@ class KVStore:
             'value': value,
             'term': self.term,
             'client': client,
-            'MID': MID
+            'MID': MID,
+            'ack': 0
         })
         self.commit_index += 1
         self.ack_count += 1
@@ -293,7 +312,8 @@ class KVStore:
                     'value': entry['value'],
                     'term': entry['term'],
                     'client': entry['client'],
-                    'MID': entry['MID']
+                    'MID': entry['MID'],
+                    'ack': entry['ack']
                 })
                 #self.my_print('I just logged ' + str(entry['value']))
 
@@ -320,7 +340,8 @@ class KVStore:
                             'value': entry['value'],
                             'term': entry['term'],
                             'client': entry['client'],
-                            'MID': entry['MID']
+                            'MID': entry['MID'],
+                            'ack': entry['ack']
                         })
                         #self.my_print('I just logged ' + str(entry['value']))
 

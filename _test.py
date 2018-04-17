@@ -57,10 +57,10 @@ def run_test(filename, description, requests, replicas, mayfail, tolerance, late
         print '\t\tTesting error: Too many failed and/or unanswered responses to client put() requests'
         pf = 'FAIL'
     if stats.total_msgs > requests * replicas * 2 * tolerance:
-        print '\t\tTesting error: Too many total messages'
+        print '\t\tTesting error: Too many total messages (more than {0})'.format(requests * replicas * 2 * tolerance)
         pf = 'FAIL'
     if stats.mean_latency > latency:
-        print '\t\tTesting error: Latency of requests is too high'
+        print '\t\tTesting error: Latency of requests is too high (more than {0})'.format(latency)
         pf = 'FAIL'
 
     if pf == 'PASS' and log:
