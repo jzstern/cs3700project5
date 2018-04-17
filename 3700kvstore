@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        #print "{0}     {1}".format(self.id, string)
+        print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -112,15 +112,16 @@ class KVStore:
 
     def check_leadership(self, msg_source, msg_leader, msg_term, msg_type):
         # If we receive a message with a higher term or we get a heartbeat from a different leader than our own....
-        if msg_type == 'append_entries' and msg_term >= self.term:
-                # ... make that replica our leader
-                self.leader = msg_source
+        if (msg_type == 'append_entries') and ((self.state == 'follower') or \
+                (self.state == 'candidate' and msg_term >= self.term)):
+            # ... make that replica our leader
+            self.leader = msg_source
 
-                # Update our term and state
-                self.term = msg_term
-                self.state = 'follower'
+            # Update our term and state
+            self.term = msg_term
+            self.state = 'follower'
 
-                self.my_print("Updated our leader: {0}".format(self.leader))
+            #self.my_print("Updated our leader: {0}".format(self.leader))
         return
 
     def send_message(self, dest, type, value={}, MID=''):
@@ -398,7 +399,7 @@ class KVStore:
                     # ...if we have a leader...
                     if self.leader != 'FFFF':
                         # ... redirect it to the leader
-                        self.my_print(self.id + '     Redirecting client to leader...')
+                        self.my_print('Redirecting client to leader...')
                         self.send_message(msg['src'], 'redirect', {}, msg['MID'])
                     # ...if we don't have a leader...
                     else:
