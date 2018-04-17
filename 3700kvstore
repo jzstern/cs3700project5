@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        #print "{0}     {1}".format(self.id, string)
+        print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -77,10 +77,10 @@ class KVStore:
         # we consider it more up to date if their last log entry has a higher term
         # than our last long entry OR if the terms are equal, if their log is at least
         # as long as ours
+        self.leader = 'FFFF'
         if (last_index == 0 and last_term == 0) or (last_term > self.log[len(self.log) - 1]['term']) or ((last_term == self.log[len(self.log) - 1]['term']) and (last_index >= len(self.log))): 
             self.my_print("casting vote for {0}, term {1}".format(ID, self.term))
             self.term = term
-            self.leader = 'FFFF'
             self.send_message(ID, 'cast_vote')
             self.last_leader_msg = time.time()
         return
@@ -110,9 +110,14 @@ class KVStore:
         self.my_print("{0} voted for me".format(self.votes))
         return
 
+    # given a heartbeat message, determines if we have a new leader & updates
+    # accordingly
     def check_leadership(self, msg_source, msg_leader, msg_term, msg_type, leader_commit_index):
         # If we receive a message with a higher term or we get a heartbeat from a different leader than our own....
         if ((self.state == 'follower') or (self.state == 'candidate' and (msg_term >= self.term or leader_commit_index >= self.commit_index))):
+
+            if self.leader == 'FFFF':
+                self.my_print("Going to change my leader to {0}".format(msg_source))
             # ... make that replica our leader
             self.leader = msg_source
 
