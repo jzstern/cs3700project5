@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        #print "{0}     {1}".format(self.id, string)
+        print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -65,7 +65,8 @@ class KVStore:
         self.votes = [self.id] # vote for urself tho
         self.state = 'candidate'
         self.term += 1
-        self.send_message('FFFF', 'req_vote')
+        for replica in self.replicas:
+            self.send_message(replica, 'req_vote')
         self.election_start_time = time.time()
         return
 
@@ -82,6 +83,8 @@ class KVStore:
             self.term = term
             self.send_message(ID, 'cast_vote')
             self.last_leader_msg = time.time()
+        else:
+            self.my_print("Did NOT cast a vote.")
         return
 
     def handle_vote(self, src):
