@@ -22,7 +22,8 @@ class KVStore:
         self.last_heartbeat_sent = time.time()
         # The current election term across all replicas
         self.term = 0
-        # A list of dictionaries containing a command, the term it was called, and a log index
+        # A list of dictionaries containing a command, the term it was added during,
+        # and the # of acks received for the entry.
         self.log = []
         # Dict containing key value pairs as requested by the client
         self.key_store = {}
@@ -30,8 +31,6 @@ class KVStore:
         self.commit_index = 0
         # Index of the last thing applied to the state machine
         self.last_applied = 0
-        # Number of replicas that have an updated to the next log entry we want to commit
-        self.ack_count = 0
         # Dict { replica_id: next_index } representing the index of the next log entry to send to each replica
         self.next_index = {}
         # List of indexes of the highest entry known to be replicated in the keystore of each replica
@@ -99,8 +98,7 @@ class KVStore:
             # we are the leader!
             self.leader = self.id
             self.state = 'leader'
-            self.ack_count = 0
-            self.commit_index = 0
+            self.commit_index = len(self.log)
 
             # Update everyone's next_index to match my last logged + 1
             for replica in self.replicas:
@@ -292,7 +290,6 @@ class KVStore:
             'ack': 0
         })
         self.commit_index += 1
-        self.ack_count += 1
         #self.my_print('I just logged ' + str(self.log[len(self.log) - 1]))
         return
 
