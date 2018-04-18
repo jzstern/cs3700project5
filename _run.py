@@ -216,7 +216,7 @@ class Client:
         del self.reqs[mid]
         self.leader = msg['leader']
         self.sim.stats.latencies.append(time.time() - req.ts)
-        print '\nMESSAGE ID {0} TOOK {1}\n'.format(mid, time.time() - req.ts)
+        #print '\nMESSAGE ID {0} TOOK {1}\n'.format(mid, time.time() - req.ts)
         
         # if this is a redirect or a fail, try again
         if msg['type'] in ['redirect', 'fail']:
@@ -382,12 +382,15 @@ class Simulation:
     def __kill_leader__(self):
         if self.leader != 'FFFF':
             self.__kill_replica__(self.replicas[self.leader])
+            print "KILLING LEADER {0}".format(self.leader)
             self.leader = 'FFFF'
             for client in self.clients.itervalues(): client.forget()
                         
     def __kill_non_leader__(self):
         if len(self.living_rids) > 1:
-            self.__kill_replica__(self.replicas[random.choice(list(self.living_rids - set([self.leader])))])
+            to_kill = self.replicas[random.choice(list(self.living_rids - set([self.leader])))]
+            print "KILLING FOLLOWER {0}".format(to_kill)
+            self.__kill_replica__(to_kill)
         else:
             print '*** Simulator Error - too few living replicas to kill another (%i)' % (len(self.living_rids))
 

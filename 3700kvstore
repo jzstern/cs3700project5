@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        print "{0}     {1}".format(self.id, string)
+        #print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -232,7 +232,7 @@ class KVStore:
         if not identical_logs:
             # ... decrement their next_index
             self.next_index[src] -= 1
-            self.send_message(src, 'append_entries')
+            #self.send_message(src, 'append_entries')
         else:
             # ... but if they match, update their next_index
             self.next_index[src] = replica_commit_index + 1

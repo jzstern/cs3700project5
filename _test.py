@@ -51,10 +51,11 @@ def run_test(filename, description, requests, replicas, mayfail, tolerance, late
         print '\t\tTesting error: >0 replicas died unexpectedly'
         pf = 'FAIL'
     if stats.failed_get + stats.unanswered_get > requests * mayfail:
-        print '\t\tTesting error: Too many failed and/or unanswered responses to client get() requests'
+        print '\t\tTesting error: Too many failed and/or unanswered responses to client get() requests {0} / {1}'.format(stats.failed_get + stats.unanswered_get, requests * mayfail)
+
         pf = 'FAIL'
     if stats.failed_put + stats.unanswered_put > requests * mayfail:
-        print '\t\tTesting error: Too many failed and/or unanswered responses to client put() requests'
+        print '\t\tTesting error: Too many failed and/or unanswered responses to client put() requests {0} / {1}'.format(stats.failed_put + stats.unanswered_put, requests * mayfail)
         pf = 'FAIL'
     if stats.total_msgs > requests * replicas * 2 * tolerance:
         print '\t\tTesting error: Too many total messages (more than {0})'.format(requests * replicas * 2 * tolerance)
@@ -97,13 +98,13 @@ trials = []
 #trials.append(run_test('crash-4.json', 'No drops, 2 leader failures, 20% read',
 #                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.4, LATENCY_LOW))
 
-print 'Partition tests (5 replicas, 30 seconds, 500 requests):'
-trials.append(run_test('partition-1.json', 'No drops, 1 easy partition, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.3, LATENCY_LOW))
-trials.append(run_test('partition-2.json', 'No drops, 2 easy partitions, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.4, LATENCY_LOW))
-trials.append(run_test('partition-3.json', 'No drops, 1 hard partition, 20% read',
-                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.5, LATENCY_HIGH))
+#print 'Partition tests (5 replicas, 30 seconds, 500 requests):'
+#trials.append(run_test('partition-1.json', 'No drops, 1 easy partition, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.3, LATENCY_LOW))
+#trials.append(run_test('partition-2.json', 'No drops, 2 easy partitions, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_LOW, 1.4, LATENCY_LOW))
+#trials.append(run_test('partition-3.json', 'No drops, 1 hard partition, 20% read',
+#                       PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.5, LATENCY_HIGH))
 trials.append(run_test('partition-4.json', 'No drops, 2 hard partitions, 20% read',
                        PACKETS_LOW, REPLICAS, MAYFAIL_HIGH, 1.5, LATENCY_HIGH))
 
