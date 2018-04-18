@@ -54,7 +54,7 @@ class KVStore:
 
     # just for debug prints so we can easily turn printing on and off
     def my_print(self, string):
-        print "{0}     {1}".format(self.id, string)
+        #print "{0}     {1}".format(self.id, string)
         return
 
     # init election process by changing state to candidate, incrementing term and sending elect msgs to replicas
@@ -393,6 +393,14 @@ class KVStore:
         while len(self.messages) > 0:
             msg = self.messages.pop(0)
 
+            if 'term' in msg and msg['term'] > self.term:
+                 # ... make that replica our leader
+                self.leader = msg['src']
+
+                # Update our term and state
+                self.term = msg['term']
+                self.state = 'follower'
+
             # If I am the leader...
             if self.state == 'leader':
                 if msg['type'] == 'get':
@@ -433,10 +441,11 @@ class KVStore:
 
                 # ... or if we are asked to cast a vote
                 elif msg['type'] == 'req_vote':
+                    self.my_print("received a vote request!")
                     if self.state == 'follower':
                         self.leader = 'FFFF'
-                        if msg['term'] > self.term:
-                            self.cast_vote(msg['src'], msg['term'], msg['last_index'], msg['last_term'])
+                        #if msg['term'] > self.term:
+                        self.cast_vote(msg['src'], msg['term'], msg['last_index'], msg['last_term'])
 
                 # ... or if someone casts a vote for us
                 elif msg['type'] == 'cast_vote' and self.state == 'candidate':
