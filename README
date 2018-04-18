@@ -1,0 +1,36 @@
+We began by reading the raft paper and then creating the general class structure
+while thinking through implementation goals for the future. We decided to start
+with getting elections working correctly before attempting to handle any
+client requests. After that was up and running, we made conditions for
+handling each type of message and wrote code to follow the raft protocol. We
+then abstracted a good amount of this code into various functions that handled
+certain aspects of the program. we decided to create a message type ‘ack’ that
+followers would send back to the leader when they committed the leaders entry
+(or entries) to their log. Upon receiving acks, leader then incremented the ack
+count of the appropriate log entries based on the replica’s commit_index,
+checked for a quorum, and applied entries to the key_store accordingly.
+Most other decisions were made in congruence with the raft protocol.
+
+We did not have many problems passing the first few tests - it just took a while
+to get the code all down but we did not face any major struggles. Once it came
+to the partition tests and beyond, we had a lot of trouble getting our 
+latency below the threshold. We ended up solving this by adding ACK counts for
+each entry in the log. Initially, we had one ack value for the leader and thus
+were only commiting one entry at a time. This made our program far too slow.
+
+Once this problem was solved, the partition tests all passed and some of the 
+advanced ones did as well. At the time of writing this we are still having
+some issues when 2 leaders go down - the candidate has a hard time getting
+enough votes causing the replicas to send many fails.
+
+For testing, we mainly used print statements. We were constantly commenting
+them out for running the test script, then putting them back in for debugging.
+Thus, we made a function my_print so we could easily toggle comments on and off.
+It also pre-pended the replica ID # it was printing from which was handy in 
+debugging. Besides prints, we used the test script to benchmark our progress.
+These were very handy but we have been struggling because sometimes when we fix
+one test, others start to fail :(
+
+We pair programmed pretty much this entire project.
+
+
